@@ -1,0 +1,132 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notes-helper"
+version = "0.3.2"
+description = "Fully-local, free, open-source diarized meeting recorder — nothing leaves your device unless you decide."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Warith Harchaoui" },
+]
+keywords = ["speech", "diarization", "whisper", "local-first", "privacy", "meeting-notes", "offline"]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-learn>=1.3",
+    "soundfile>=0.12",
+    # central logging surface (osh.info/warning/error/debug + osh.verbosity)
+    "os-helper>=1.5.0",
+]
+
+# The heavy ML backends live in the AI Helpers suite (BSD-3). Installed as extras
+# so `pip install notes-helper` stays light and the sovereignty story is explicit.
+[project.optional-dependencies]
+process = [
+    "vocal-helper @ git+https://github.com/warith-harchaoui/vocal-helper.git",
+]
+capture = [
+    "capture-helper @ git+https://github.com/warith-harchaoui/capture-helper.git",
+]
+docs = [
+    # md2star: Markdown -> DOCX / PPTX / PDF, embeddable & open source
+    "md2star @ git+https://github.com/warith-harchaoui/md2star.git",
+]
+llm = [
+    "requests>=2.31",   # talk to a local Ollama at 127.0.0.1:11434
+]
+# FastAPI HTTP surface (notes_helper.api). uvicorn serves it; python-multipart is
+# required for the multipart /render upload.
+api = [
+    "fastapi>=0.111,<1",
+    "uvicorn>=0.30,<1",
+    "python-multipart>=0.0.9",
+]
+# MCP surface (notes_helper.mcp) — fastapi-mcp wraps the FastAPI app, so it needs the
+# api extra's runtime deps too.
+mcp = [
+    "fastapi-mcp>=0.3,<1",
+    "fastapi>=0.111,<1",
+    "uvicorn>=0.30,<1",
+    "python-multipart>=0.0.9",
+]
+all = [
+    "notes-helper[process,capture,docs,llm,api,mcp]",
+]
+# AI-evaluation layer (summary faithfulness / hallucination thresholds, gated in CI)
+eval = [
+    "deepeval>=1.0",
+    "giskard>=2.0",
+]
+dev = [
+    "pytest>=7",
+    "pytest-cov>=4",
+    # Pinned so local == CI (ruff's isort/lint rules drift between minor versions).
+    "ruff==0.15.21",
+    # The api/mcp smoke tests skip cleanly without these, but CI installs them so
+    # the FastAPI + MCP surfaces are actually exercised on every push.
+    "fastapi>=0.111,<1",
+    "uvicorn>=0.30,<1",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+    "fastapi-mcp>=0.3,<1",
+]
+
+[project.urls]
+Homepage = "https://deraison.ai/fr/notes-helper"
+Source = "https://github.com/warith-harchaoui/notes-helper"
+
+[project.scripts]
+notes-helper = "notes_helper.cli:main"
+# HTTP + MCP servers (install with the [api] / [api,mcp] extras).
+notes-helper-api = "notes_helper.api:main"
+notes-helper-mcp = "notes_helper.mcp:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+notes_helper = ["assets/*", "assets/fonts/*"]
+
+# --------------------------------------------------------------------------- #
+# Tooling
+# --------------------------------------------------------------------------- #
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+markers = [
+    "slow: integration tests that need real models / a running Ollama",
+    "human_review: open-ended generation surfaced for human review (not auto-gated)",
+]
+
+[tool.coverage.run]
+source = ["notes_helper"]
+branch = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+# F = pyflakes (real bugs), I = import order, B = bugbear, UP = pyupgrade.
+# Line-length (E501) is intentionally off: some generated HTML/JS strings are long.
+select = ["F", "I", "B", "UP"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency markers (File / Query / Form / Depends / Body) are
+# *designed* to be called in argument defaults — that is the framework idiom,
+# not the B008 anti-pattern. Treat them as immutable so notes_helper.api stays clean.
+extend-immutable-calls = [
+    "fastapi.File", "fastapi.Query", "fastapi.Form", "fastapi.Depends", "fastapi.Body",
+]
+
+[tool.ruff.lint.isort]
+# Declare our own package explicitly. Without this, ruff auto-detects first-party
+# differently depending on whether `notes-helper` is pip-installed (CI) or only on the
+# `src` path (local) — which flipped the import grouping and failed CI. Explicit
+# = deterministic across environments.
+known-first-party = ["notes_helper"]

@@ -1,0 +1,23 @@
+{
+  "_README": "Golden evaluation dataset for summary faithfulness. Inputs + expected properties (thresholds), NOT exact outputs. Version this file; bumping it requires a fresh eval run.",
+  "judge_hint": "Configure a LOCAL judge before running (keeps sovereignty): e.g. `deepeval set-ollama qwen2.5:32b`. Then: NOTES_HELPER_RUN_EVAL=1 pytest -q -m slow tests/eval/",
+  "cases": [
+    {
+      "name": "budget-doubled",
+      "transcript": [
+        {"t0": 0, "t1": 5, "speaker": "S0", "text": "On double le budget produit cette année."},
+        {"t0": 5, "t1": 9, "speaker": "S1", "text": "D'accord, je cadre le périmètre lundi."}
+      ],
+      "summary": "L'équipe décide de doubler le budget produit ; Bob cadrera le périmètre lundi.",
+      "min_faithfulness": 0.7
+    },
+    {
+      "name": "hallucination-negative",
+      "transcript": [
+        {"t0": 0, "t1": 4, "speaker": "S0", "text": "On reporte la sortie à septembre."}
+      ],
+      "summary": "L'équipe a levé 10 millions d'euros et rachète un concurrent américain.",
+      "max_faithfulness": 0.5
+    }
+  ]
+}

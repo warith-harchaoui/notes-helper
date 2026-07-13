@@ -1,0 +1,24 @@
+# notes-helper — development & test dependencies.
+# Superset of the runtime requirements plus the test / lint / eval tooling.
+# Mirrors the [dev] and [eval] extras in pyproject.toml.
+-r requirements.txt
+
+# Test + coverage
+pytest>=7
+pytest-cov>=4
+httpx>=0.27
+
+# Lint (pinned so local == CI; ruff's isort/lint rules drift between minors)
+ruff==0.15.21
+
+# API / MCP surfaces exercised by the smoke tests
+fastapi>=0.111,<1
+uvicorn>=0.30,<1
+python-multipart>=0.0.9
+fastapi-mcp>=0.3,<1
+
+# AI-evaluation layer (rule 15): summary faithfulness / hallucination thresholds.
+# Opt-in and gated behind NOTES_HELPER_RUN_EVAL + the `slow` marker (local judge,
+# no cloud cost). See tests/eval/.
+deepeval>=1.0
+giskard>=2.0

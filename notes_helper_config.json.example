@@ -1,0 +1,12 @@
+{
+  "_README": "Copy to notes_helper_config.json (git-ignored) and edit. All keys optional; env vars (NOTES_HELPER_*) override this file, which overrides code defaults. Real notes_helper_config.json must NEVER be committed.",
+
+  "ollama_url": "http://127.0.0.1:11434",
+  "ollama_model": "qwen2.5:32b",
+  "whisper_model": "large-v3-turbo-q5_0",
+  "language": "fr",
+  "db_path": "~/.notes-helper/people.db",
+
+  "_hf_token_note": "Only needed if a gated model must be downloaded on first run; otherwise leave empty. Never commit a real token.",
+  "hf_token": ""
+}

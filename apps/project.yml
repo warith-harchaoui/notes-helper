@@ -1,0 +1,76 @@
+# XcodeGen spec for the NotesHelper apps (macOS + iOS), defined in text so the Xcode
+# project is reproducible and reviewable. Generate with:  xcodegen generate
+#
+# Author: Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
+name: NotesHelper
+
+options:
+  bundleIdPrefix: ai.deraison.noteshelper
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: "YES"
+    SWIFT_VERSION: "5.9"
+    # Sovereignty note: the macOS target is deliberately NOT sandboxed in v0.1
+    # because it shells out to the local `notes-helper` CLI (Process), which the App
+    # Sandbox forbids. Distribution is direct/notarized, not Mac App Store.
+    # Zero-egress remains true (no code calls the network) and is verifiable with
+    # a network monitor; iOS (native engine, no subprocess) will be sandboxed
+    # with no network entitlement so the OS itself enforces it.
+
+# On-device model backends for the iOS native engine. The Swift sources guard
+# these with `#if canImport(...)`, so the app still builds/type-checks without
+# them; adding them here activates the real whisper.cpp / MLX paths in Xcode.
+packages:
+  SwiftWhisper:
+    url: https://github.com/exPHAT/SwiftWhisper.git
+    from: "1.0.0"
+  # MLX (mlx-swift-examples) is intentionally NOT wired yet: MLXSynthesizer is a
+  # stub, and MLX drags a very heavy dependency tree (transformers/nio/syntax
+  # macros) that bloats the build for no current function. The code stays guarded
+  # by `#if canImport(MLXLLM)` (compiles to the heuristic fallback); re-add this
+  # package when the real MLX synthesis is implemented.
+
+targets:
+  NotesHelper-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/NotesHelper
+      - path: Models
+        buildPhase: resources
+        optional: true
+    settings:
+      base:
+        PRODUCT_NAME: NotesHelper
+        # User-facing app name (Finder / menu bar / Info.plist) — the spaced brand.
+        INFOPLIST_KEY_CFBundleDisplayName: "Notes Helper"
+        PRODUCT_BUNDLE_IDENTIFIER: ai.deraison.noteshelper.macos
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Notes Helper records your meetings locally — nothing leaves your device."
+
+  NotesHelper-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/NotesHelper
+      - path: Models
+        buildPhase: resources
+        optional: true
+    settings:
+      base:
+        PRODUCT_NAME: NotesHelper
+        # User-facing app name (Home screen / Info.plist) — the spaced brand.
+        INFOPLIST_KEY_CFBundleDisplayName: "Notes Helper"
+        PRODUCT_BUNDLE_IDENTIFIER: ai.deraison.noteshelper.ios
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Notes Helper records your conversations on-device — nothing leaves your iPhone."
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      # whisper.cpp ASR (ship a ggml model to activate transcription).
+      - package: SwiftWhisper

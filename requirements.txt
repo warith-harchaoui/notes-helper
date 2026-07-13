@@ -1,0 +1,10 @@
+# notes-helper — runtime dependencies (core install).
+# Mirrors [project.dependencies] in pyproject.toml. The heavy ML backends
+# (vocal-helper / capture-helper / md2star) and the api / mcp / llm surfaces
+# are optional extras — install them via `pip install "notes-helper[all]"`.
+numpy>=1.24
+scipy>=1.10
+scikit-learn>=1.3
+soundfile>=0.12
+# central logging surface (osh.info/warning/error/debug + osh.verbosity)
+os-helper>=1.5.0

@@ -1,0 +1,57 @@
+name: CI
+
+# Rigorous, blocking CI (coding-standards rule 14): a red build cannot merge.
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # Fast lane installs only the core + dev deps. The heavy ML backends
+      # (vocal-helper / capture-helper / md2star) are optional extras and are
+      # lazily imported, so the unit tests below never need them.
+      # Non-editable install: copies notes-helper + notes_helper.outputs (+ assets) into
+      # site-packages — exactly what real users get, and it avoids the PEP 660
+      # strict-editable quirk that hides src-layout subpackages like notes_helper.outputs.
+      - name: Install (core + dev)
+        run: python -m pip install --upgrade pip && python -m pip install ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Unit tests (fast lane) + coverage
+        run: pytest -q -m "not slow" --cov=notes_helper
+
+  # Swift apps: type-check both platform targets. Uses swiftc directly (no Xcode
+  # build, no SwiftPM fetch), so the `#if canImport(SwiftWhisper/MLXLLM)` guarded
+  # paths are skipped and the always-available fallbacks are checked.
+  swift:
+    name: swift type-check (macOS + iOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Type-check Swift sources
+        run: |
+          cd apps
+          xcrun --sdk macosx  swiftc -typecheck -target arm64-apple-macos14.0 Sources/NotesHelper/*.swift Sources/NotesHelper/Engine/*.swift
+          xcrun --sdk iphoneos swiftc -typecheck -target arm64-apple-ios17.0  Sources/NotesHelper/*.swift Sources/NotesHelper/Engine/*.swift
+
+  # AI-eval (rule 15) is opt-in and runs a LOCAL judge; it is not gated per-commit
+  # (no cloud judge, cost control). Run it manually / nightly:
+  #   deepeval set-ollama qwen2.5:32b
+  #   NOTES_HELPER_RUN_EVAL=1 pytest -q -m slow tests/eval/
