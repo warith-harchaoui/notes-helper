@@ -43,8 +43,9 @@ All notable changes to this project are documented here. Format based on
   deliberately excluded — heavy on-device models belong to a worker surface, not
   a synchronous request.
 - **MCP surface** (`notes_helper.mcp`, `[mcp]` extra) — exposes the FastAPI app as MCP
-  tools via `fastapi-mcp`, so an MCP client (Claude Desktop, agents, IDEs) can
-  call `normalize` / `synth` / `render` as first-class tools. Run it with
+  tools via `fastapi-mcp`, so any MCP client — proprietary (Claude Desktop,
+  Cursor, Windsurf) or open-source (Cline, Continue, Goose, Zed), plus agents
+  and IDEs — can call `normalize` / `synth` / `render` as first-class tools. Run it with
   `notes-helper-mcp` or `python -m notes_helper.mcp`. This brings notes-helper in line with the
   rest of the `*-helper` suite, which already ships CLI + API + MCP.
 - Smoke + round-trip tests for both surfaces (`tests/test_api.py`,

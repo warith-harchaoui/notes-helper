@@ -4,8 +4,10 @@ notes-helper — Model Context Protocol (MCP) surface.
 Module summary
 --------------
 Adapter that exposes the FastAPI app defined in :mod:`notes_helper.api` as MCP tools,
-so an MCP-aware client (Claude Desktop, custom agents, IDE integrations, …) can
-call ``normalize`` / ``synth`` / ``render`` as first-class tools. Uses
+so any MCP-aware client can call ``normalize`` / ``synth`` / ``render`` as
+first-class tools — proprietary ones (Claude Desktop, Cursor, Windsurf) or
+open-source ones (Cline, Continue, Goose, Zed), plus custom agents and IDE
+integrations. Uses
 :mod:`fastapi_mcp` (https://github.com/tadata-org/fastapi_mcp) — one line wraps
 the whole existing HTTP surface, so the route definitions are never duplicated.
 
