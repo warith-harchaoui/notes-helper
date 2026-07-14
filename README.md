@@ -10,6 +10,12 @@
 
 By [Warith HARCHAOUI](https://linkedin.com/in/warith-harchaoui) · [🌍 deraison.ai/fr/notes-helper](https://deraison.ai/fr/notes-helper)
 
+# Documentation
+
+[💻 Documentation](https://harchaoui.org/warith/ai-helpers/docs/notes-helper-doc/)
+
+[📋 Examples](https://github.com/warith-harchaoui/notes-helper/blob/main/EXAMPLES.md)
+
 ## The promise
 
 > **Nothing leaves your device during use.** The only network events are one-time
