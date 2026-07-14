@@ -78,7 +78,7 @@ def load_config(path: str = CONFIG_PATH) -> dict[str, Any]:
     human notes, e.g. ``{"_note": "prod endpoint", "OLLAMA_URL": "..."}``.
     """
     # Absence of the file is the common case (no override) — not an error.
-    if not os.path.isfile(path):
+    if not osh.file_exists(path):
         return {}
     try:
         with open(path, encoding="utf-8") as fh:

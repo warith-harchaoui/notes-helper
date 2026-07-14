@@ -26,14 +26,14 @@ dependencies = [
 # so `pip install notes-helper` stays light and the sovereignty story is explicit.
 [project.optional-dependencies]
 process = [
-    "vocal-helper @ git+https://github.com/warith-harchaoui/vocal-helper.git",
+    "vocal-helper>=0.4.1",
 ]
 capture = [
-    "capture-helper @ git+https://github.com/warith-harchaoui/capture-helper.git",
+    "capture-helper>=0.2.3",
 ]
 docs = [
     # md2star: Markdown -> DOCX / PPTX / PDF, embeddable & open source
-    "md2star @ git+https://github.com/warith-harchaoui/md2star.git",
+    "md2star>=2.4.1",
 ]
 llm = [
     "requests>=2.31",   # talk to a local Ollama at 127.0.0.1:11434

@@ -4,6 +4,24 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-07-14
+
+### Added
+- Optional meeting-context input for synthesis (inline text or file) via the
+  CLI, with unambiguous second-based chunk timestamps, plus a synthesis
+  robustness test suite.
+
+### Changed
+- Flip optional-extra dependencies (`vocal-helper`, `capture-helper`,
+  `md2star`) from `git+https` to PyPI version specifiers so the package is
+  installable from PyPI.
+
+### Maintenance
+- Apply the project coding standards across `src/` and `tests/` (Numpy
+  docstrings, full typing, comment density above the floor); route library
+  logging through the os-helper surface and adopt os-helper utilities more
+  widely. Refresh the project logo asset.
+
 ## [0.3.2] — 2026-07-13
 
 ### Changed

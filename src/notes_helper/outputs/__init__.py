@@ -34,6 +34,8 @@ import json
 import os
 from collections.abc import Iterable
 
+import os_helper as osh
+
 from ..synth import normalize_synthese
 from .docs import compile_all
 from .html import render_html
@@ -75,7 +77,7 @@ def _load(out_dir: str) -> tuple[list[dict], dict]:
     syn_path = os.path.join(out_dir, "synthese.json")
     # The synthesis is a separate, optional (local Ollama) step; guide the user
     # explicitly instead of failing with an opaque JSON error downstream.
-    if not os.path.exists(syn_path):
+    if not osh.file_exists(syn_path):
         raise FileNotFoundError(
             f"{syn_path} missing — run `notes-helper synth {out_dir}` first (local Ollama)."
         )

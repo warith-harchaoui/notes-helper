@@ -44,6 +44,8 @@ from __future__ import annotations
 import os
 import re
 
+import os_helper as osh
+
 from ._timefmt import seconds as _seconds
 
 # Sentinel that separates generated content (above) from user annotations
@@ -146,7 +148,7 @@ def _write_preserving(path: str, generated: str) -> None:
     no tail to preserve.
     """
     tail = ""
-    if os.path.exists(path):
+    if osh.file_exists(path):
         old = open(path, encoding="utf-8").read()
         # Keep only the portion the user owns — everything after the marker.
         if MARKER in old:

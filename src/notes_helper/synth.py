@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import datetime
 import json
-import os
 import re
 import urllib.request
 from collections.abc import Iterator
@@ -617,6 +616,6 @@ def load_speakers(mapping_path: str, transcript: list[dict]) -> dict:
     """
     ids = sorted({u["speaker"] for u in transcript})
     names: dict = {}
-    if mapping_path and os.path.exists(mapping_path):
+    if mapping_path and osh.file_exists(mapping_path):
         names = json.load(open(mapping_path)).get("mapping", {})
     return {sid: {"name": names.get(sid, sid), "role": ""} for sid in ids}
