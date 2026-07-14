@@ -338,8 +338,10 @@ def _chunks(transcript: list[dict], names: dict, max_chars: int = 6000) -> Itera
     Yields
     ------
     str
-        A block of newline-joined ``[H:MM:SS] Name: text`` lines. Timestamps are
-        preserved inline so the model can attribute decisions/quotes to seconds.
+        A block of newline-joined ``[<seconds>s] Name: text`` lines. Timestamps
+        are emitted in whole seconds — the exact unit the map prompt asks the
+        model to echo back — so ``H:MM:SS`` can't be flattened into a bogus
+        integer (e.g. ``32:59`` mis-copied as ``3259``).
 
     Notes
     -----
@@ -349,7 +351,7 @@ def _chunks(transcript: list[dict], names: dict, max_chars: int = 6000) -> Itera
     buf: list[str] = []
     size = 0
     for u in transcript:
-        line = f"[{_hhmmss(u['t0'])}] {names.get(u['speaker'], u['speaker'])}: {u['text']}"
+        line = f"[{int(round(u['t0']))}s] {names.get(u['speaker'], u['speaker'])}: {u['text']}"
         if size + len(line) > max_chars and buf:
             yield "\n".join(buf)
             buf, size = [], 0
@@ -359,6 +361,11 @@ def _chunks(transcript: list[dict], names: dict, max_chars: int = 6000) -> Itera
         yield "\n".join(buf)
 
 
+# Upper bound on how much user context is appended to each system prompt. Large
+# enough to carry a real meeting brief, small enough to leave room for the
+# transcript chunk in a local model's context window.
+_CONTEXT_MAX_CHARS: int = 8000
+
 # System prompt for the map step: extract faithful partial notes from one chunk.
 # Kept as a module constant (formatted with the target language at call time).
 _MAP_SYS: str = ("Tu es un secrétaire de séance rigoureux. À partir d'un extrait de "
@@ -366,6 +373,8 @@ _MAP_SYS: str = ("Tu es un secrétaire de séance rigoureux. À partir d'un extr
                  "Renvoie un JSON: {{\"points\":[...], \"decisions\":[{{\"decision\":..,\"contexte\":..,\"t\":sec}}], "
                  "\"actions\":[{{\"action\":..,\"responsable\":..,\"echeance\":..}}], "
                  "\"citations\":[{{\"speaker\":..,\"texte\":..,\"t\":sec}}], \"themes\":[..]}}. "
+                 "Les lignes sont préfixées par leur horodatage en secondes, ex. [1979s]; "
+                 "recopie CET entier (en secondes) tel quel dans le champ t. "
                  "Chaque décision/citation garde le timestamp (secondes) d'où elle vient.")
 
 # System prompt for the reduce step: fold partial notes into the final report
@@ -382,7 +391,8 @@ _REDUCE_SYS: str = ("Tu es un rédacteur de compte-rendu. À partir de notes par
 
 def synthesize(transcript: list[dict], speakers: dict, *, title: str = "",
                date: str = "", lieu: str = "", model: str = OLLAMA_MODEL,
-               language: str = "fr", audio_sources: list | None = None) -> dict:
+               language: str = "fr", audio_sources: list | None = None,
+               context: str = "") -> dict:
     """Produce a structured meeting report from a diarized transcript.
 
     Parameters
@@ -404,6 +414,14 @@ def synthesize(transcript: list[dict], speakers: dict, *, title: str = "",
         Output language code (default ``"fr"``).
     audio_sources : list, optional
         Source descriptors recorded in the report metadata.
+    context : str, optional
+        Free-text meeting context (participants and roles, proper nouns, domain
+        vocabulary, acronyms, stakes) appended to both the map and reduce system
+        prompts. Speech-to-text and summarisation both improve sharply when the
+        model knows the domain: it fixes proper-noun spellings and frames the
+        notes correctly. It is guidance only — the model is still told never to
+        invent facts. Truncated defensively to keep the local context window
+        safe. Stays fully local: this is plain text the caller already holds.
 
     Returns
     -------
@@ -419,6 +437,19 @@ def synthesize(transcript: list[dict], speakers: dict, *, title: str = "",
     fallback so the report is still produced (never blocks on a missing LLM).
     """
     names = {sid: info.get("name", sid) for sid, info in speakers.items()}
+    # Optional user context, appended to every system prompt (map + reduce). It
+    # biases proper-noun spelling and framing without licensing invention, and is
+    # capped so a long brief cannot crowd out the transcript in the context window.
+    ctx = context.strip()
+    if len(ctx) > _CONTEXT_MAX_CHARS:
+        osh.warning(f"  synth: context is {len(ctx)} chars, truncating to {_CONTEXT_MAX_CHARS}")
+        ctx = ctx[:_CONTEXT_MAX_CHARS]
+    ctx_block = ("\n\nContexte fourni par l'utilisateur (participants et rôles, noms propres, "
+                 "sigles, enjeux). Sers-t'en pour orthographier correctement les noms propres "
+                 "et bien cadrer les notes, mais N'INVENTE AUCUN fait absent de la transcription:\n"
+                 + ctx) if ctx else ""
+    map_sys = _MAP_SYS.format(lang=language) + ctx_block
+    reduce_sys = _REDUCE_SYS.format(lang=language) + ctx_block
     duree = _hhmmss(transcript[-1]["t1"]) if transcript else "0:00:00"
     meta = {"titre": title or "Compte-rendu", "date": date or datetime.date.today().isoformat(),
             "horaire": "", "lieu": lieu, "duree": duree,
@@ -435,7 +466,7 @@ def synthesize(transcript: list[dict], speakers: dict, *, title: str = "",
     for i, chunk in enumerate(chunks):
         osh.info(f"  synth map {i+1}/{len(chunks)}...")
         try:
-            c = _ollama([{"role": "system", "content": _MAP_SYS.format(lang=language)},
+            c = _ollama([{"role": "system", "content": map_sys},
                          {"role": "user", "content": chunk}], model)
         except Exception as e:
             osh.warning(f"  synth map {i+1} failed: {e}")
@@ -458,7 +489,7 @@ def synthesize(transcript: list[dict], speakers: dict, *, title: str = "",
         notes = json.dumps(partials, ensure_ascii=False)[:24000]
         try:
             final = _json_loads_lax(_ollama(
-                [{"role": "system", "content": _REDUCE_SYS.format(lang=language)},
+                [{"role": "system", "content": reduce_sys},
                  {"role": "user", "content": notes}], model))
         except Exception as e:
             osh.warning(f"  synth reduce failed ({e}) -> minimal heuristic synthese")

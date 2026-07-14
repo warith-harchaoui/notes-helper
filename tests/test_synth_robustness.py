@@ -50,6 +50,19 @@ def _long_transcript(n: int = 90) -> list[dict]:
     ]
 
 
+def test_chunks_emit_seconds_not_hms() -> None:
+    """Chunk lines tag time in whole seconds (``[1979s]``), never ``H:MM:SS``.
+
+    The map prompt asks the model to echo a seconds integer; feeding it
+    ``0:32:59`` invited a flattened ``3259`` that the renderer then read as
+    3259 seconds. Emitting ``[1979s]`` keeps the unit unambiguous.
+    """
+    tr = [{"t0": 1979.4, "t1": 1983.0, "speaker": "S0", "text": "bonjour"}]
+    block = next(synth._chunks(tr, {"S0": "Alice"}))
+    assert block.startswith("[1979s] Alice: bonjour")
+    assert ":" not in block.split("]")[0], "timestamp tag must not contain H:MM:SS colons"
+
+
 def test_synthesize_survives_some_bad_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
     """A mix of good and garbage map chunks still yields a real (non-heuristic) report."""
     good_map = '{"points":["un point"],"decisions":[],"actions":[],"citations":[],"themes":["t"]}'
@@ -86,3 +99,45 @@ def test_synthesize_falls_back_when_llm_unreachable(monkeypatch: pytest.MonkeyPa
                            language="fr", model="test")
 
     assert _HEURISTIC_MARK in " ".join(out["resume"])
+
+
+def test_context_is_injected_into_map_and_reduce_prompts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A caller-supplied ``context`` reaches the system prompt of both LLM steps."""
+    marker = "GlassPop Oculomics Florent Costantini"
+    seen = {"map": False, "reduce": False}
+
+    def fake_ollama(messages, model, **kw):
+        system = messages[0]["content"]
+        if "rédacteur de compte-rendu" in system:  # reduce step
+            seen["reduce"] = marker in system
+            return ('{"resume":["ok"],"points_cles":[],"decisions":[],"actions":[],'
+                    '"chapitres":[],"themes":[],"citations":[]}')
+        # map step
+        seen["map"] = seen["map"] or (marker in system)
+        return '{"points":["p"],"decisions":[],"actions":[],"citations":[],"themes":["t"]}'
+
+    monkeypatch.setattr(synth, "_ollama", fake_ollama)
+    synth.synthesize(_long_transcript(), {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
+                     language="fr", model="test", context=marker)
+
+    assert seen["map"], "context should be appended to the map system prompt"
+    assert seen["reduce"], "context should be appended to the reduce system prompt"
+
+
+def test_empty_context_leaves_prompts_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No context means no appended block — the base system prompts are used verbatim."""
+    captured: list[str] = []
+
+    def fake_ollama(messages, model, **kw):
+        captured.append(messages[0]["content"])
+        if "rédacteur de compte-rendu" in messages[0]["content"]:
+            return ('{"resume":["ok"],"points_cles":[],"decisions":[],"actions":[],'
+                    '"chapitres":[],"themes":[],"citations":[]}')
+        return '{"points":["p"],"decisions":[],"actions":[],"citations":[],"themes":["t"]}'
+
+    monkeypatch.setattr(synth, "_ollama", fake_ollama)
+    synth.synthesize(_long_transcript(), {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
+                     language="fr", model="test", context="   ")
+
+    assert captured, "the LLM should have been called"
+    assert all("Contexte fourni par l'utilisateur" not in s for s in captured)

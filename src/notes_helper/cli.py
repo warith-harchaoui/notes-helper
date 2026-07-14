@@ -85,8 +85,12 @@ def _cmd_synth(a: argparse.Namespace) -> None:
     from .synth import load_speakers, synthesize
     tr = json.load(open(os.path.join(a.dir, "transcript.json"), encoding="utf-8"))
     speakers = load_speakers(os.path.join(a.dir, "speaker_mapping.json"), tr)
+    # A --context-file (if readable) takes precedence over inline --context.
+    context = a.context or ""
+    if getattr(a, "context_file", ""):
+        context = open(a.context_file, encoding="utf-8").read()
     syn = synthesize(tr, speakers, title=a.title or os.path.basename(a.dir.rstrip("/")),
-                     lieu=a.lieu or "", model=a.model, language=a.lang)
+                     lieu=a.lieu or "", model=a.model, language=a.lang, context=context)
     out = os.path.join(a.dir, "synthese.json")
     json.dump(syn, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"wrote {out}")  # user-facing result: where the artifact landed
@@ -301,6 +305,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         p.add_argument("--lang", default="fr")
         p.add_argument("--format", default="html")
         p.add_argument("--vault", default="")
+        # Meeting context for synth: inline text or a file (file wins). Used to
+        # bias proper-noun spelling and framing. Ignored by the report handler.
+        p.add_argument("--context", default="")
+        p.add_argument("--context-file", default="")
 
     p = sub.add_parser("run"); p.add_argument("audio"); p.add_argument("--out", required=True)
     p.add_argument("--speakers", type=int, default=None); p.add_argument("--lang", default="fr")
