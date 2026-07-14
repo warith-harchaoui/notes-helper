@@ -30,6 +30,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import datetime
@@ -58,7 +59,7 @@ def _hhmmss(s: float | int | None) -> str:
         The duration as ``H:MM:SS`` (hours not zero-padded).
     """
     s = int(s or 0)
-    return f"{s//3600:d}:{(s%3600)//60:02d}:{s%60:02d}"
+    return f"{s // 3600:d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
 
 
 def _ollama(messages: list[dict], model: str, fmt_json: bool = True, timeout: int = 600) -> str:
@@ -97,8 +98,10 @@ def _ollama(messages: list[dict], model: str, fmt_json: bool = True, timeout: in
     if fmt_json:
         body["format"] = "json"
     req = urllib.request.Request(
-        f"{OLLAMA_URL}/api/chat", data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"})
+        f"{OLLAMA_URL}/api/chat",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+    )
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())["message"]["content"]
 
@@ -160,7 +163,14 @@ def _json_loads_lax(s: str) -> dict:
 
 # The seven LLM-owned report keys, in the canonical output order.
 _REPORT_KEYS: tuple[str, ...] = (
-    "resume", "points_cles", "decisions", "actions", "chapitres", "themes", "citations")
+    "resume",
+    "points_cles",
+    "decisions",
+    "actions",
+    "chapitres",
+    "themes",
+    "citations",
+)
 
 
 def _as_str(x: object) -> str:
@@ -221,9 +231,14 @@ def _as_str_list(x: object) -> list[str]:
     return [s for s in (_as_str(i) for i in items) if s]
 
 
-def _as_dict_list(x: object, str_keys: tuple[str, ...], *,
-                  list_keys: tuple[str, ...] = (), keep_keys: tuple[str, ...] = (),
-                  fallback_key: str = "") -> list[dict]:
+def _as_dict_list(
+    x: object,
+    str_keys: tuple[str, ...],
+    *,
+    list_keys: tuple[str, ...] = (),
+    keep_keys: tuple[str, ...] = (),
+    fallback_key: str = "",
+) -> list[dict]:
     """Coerce a value into a list of dicts with well-typed, expected keys.
 
     Parameters
@@ -308,16 +323,24 @@ def normalize_synthese(syn: dict) -> dict:
         "speakers": syn.get("speakers", {}),
         "resume": _as_str_list(syn.get("resume")),
         "points_cles": _as_str_list(syn.get("points_cles")),
-        "decisions": _as_dict_list(syn.get("decisions"), ("decision", "contexte"),
-                                   keep_keys=("t",), fallback_key="decision"),
-        "actions": _as_dict_list(syn.get("actions"), ("action", "responsable", "echeance"),
-                                 fallback_key="action"),
-        "chapitres": _as_dict_list(syn.get("chapitres"), ("titre", "resume"),
-                                   keep_keys=("t",), fallback_key="titre"),
-        "themes": _as_dict_list(syn.get("themes"), ("theme",), list_keys=("points",),
-                                fallback_key="theme"),
-        "citations": _as_dict_list(syn.get("citations"), ("speaker", "texte"),
-                                   keep_keys=("t",), fallback_key="texte"),
+        "decisions": _as_dict_list(
+            syn.get("decisions"),
+            ("decision", "contexte"),
+            keep_keys=("t",),
+            fallback_key="decision",
+        ),
+        "actions": _as_dict_list(
+            syn.get("actions"), ("action", "responsable", "echeance"), fallback_key="action"
+        ),
+        "chapitres": _as_dict_list(
+            syn.get("chapitres"), ("titre", "resume"), keep_keys=("t",), fallback_key="titre"
+        ),
+        "themes": _as_dict_list(
+            syn.get("themes"), ("theme",), list_keys=("points",), fallback_key="theme"
+        ),
+        "citations": _as_dict_list(
+            syn.get("citations"), ("speaker", "texte"), keep_keys=("t",), fallback_key="texte"
+        ),
     }
 
 
@@ -368,31 +391,43 @@ _CONTEXT_MAX_CHARS: int = 8000
 
 # System prompt for the map step: extract faithful partial notes from one chunk.
 # Kept as a module constant (formatted with the target language at call time).
-_MAP_SYS: str = ("Tu es un secrétaire de séance rigoureux. À partir d'un extrait de "
-                 "transcription horodatée, extrais fidèlement, SANS inventer, en {lang}. "
-                 "Renvoie un JSON: {{\"points\":[...], \"decisions\":[{{\"decision\":..,\"contexte\":..,\"t\":sec}}], "
-                 "\"actions\":[{{\"action\":..,\"responsable\":..,\"echeance\":..}}], "
-                 "\"citations\":[{{\"speaker\":..,\"texte\":..,\"t\":sec}}], \"themes\":[..]}}. "
-                 "Les lignes sont préfixées par leur horodatage en secondes, ex. [1979s]; "
-                 "recopie CET entier (en secondes) tel quel dans le champ t. "
-                 "Chaque décision/citation garde le timestamp (secondes) d'où elle vient.")
+_MAP_SYS: str = (
+    "Tu es un secrétaire de séance rigoureux. À partir d'un extrait de "
+    "transcription horodatée, extrais fidèlement, SANS inventer, en {lang}. "
+    'Renvoie un JSON: {{"points":[...], "decisions":[{{"decision":..,"contexte":..,"t":sec}}], '
+    '"actions":[{{"action":..,"responsable":..,"echeance":..}}], '
+    '"citations":[{{"speaker":..,"texte":..,"t":sec}}], "themes":[..]}}. '
+    "Les lignes sont préfixées par leur horodatage en secondes, ex. [1979s]; "
+    "recopie CET entier (en secondes) tel quel dans le champ t. "
+    "Chaque décision/citation garde le timestamp (secondes) d'où elle vient."
+)
 
 # System prompt for the reduce step: fold partial notes into the final report
 # with an exact, fixed set of keys.
-_REDUCE_SYS: str = ("Tu es un rédacteur de compte-rendu. À partir de notes partielles, "
-                    "produis le compte-rendu final en {lang}, JSON strict avec EXACTEMENT ces clés: "
-                    "\"resume\" (liste de paragraphes), \"points_cles\" (liste), "
-                    "\"decisions\" (liste {{decision, contexte}}), "
-                    "\"actions\" (liste {{action, responsable, echeance}}), "
-                    "\"chapitres\" (liste {{t, titre, resume}} — t en secondes), "
-                    "\"themes\" (liste {{theme, points[]}}), "
-                    "\"citations\" (liste {{speaker, texte, t}}). Fidèle aux notes, rien d'inventé.")
+_REDUCE_SYS: str = (
+    "Tu es un rédacteur de compte-rendu. À partir de notes partielles, "
+    "produis le compte-rendu final en {lang}, JSON strict avec EXACTEMENT ces clés: "
+    '"resume" (liste de paragraphes), "points_cles" (liste), '
+    '"decisions" (liste {{decision, contexte}}), '
+    '"actions" (liste {{action, responsable, echeance}}), '
+    '"chapitres" (liste {{t, titre, resume}} — t en secondes), '
+    '"themes" (liste {{theme, points[]}}), '
+    '"citations" (liste {{speaker, texte, t}}). Fidèle aux notes, rien d\'inventé.'
+)
 
 
-def synthesize(transcript: list[dict], speakers: dict, *, title: str = "",
-               date: str = "", lieu: str = "", model: str = OLLAMA_MODEL,
-               language: str = "fr", audio_sources: list | None = None,
-               context: str = "") -> dict:
+def synthesize(
+    transcript: list[dict],
+    speakers: dict,
+    *,
+    title: str = "",
+    date: str = "",
+    lieu: str = "",
+    model: str = OLLAMA_MODEL,
+    language: str = "fr",
+    audio_sources: list | None = None,
+    context: str = "",
+) -> dict:
     """Produce a structured meeting report from a diarized transcript.
 
     Parameters
@@ -444,16 +479,27 @@ def synthesize(transcript: list[dict], speakers: dict, *, title: str = "",
     if len(ctx) > _CONTEXT_MAX_CHARS:
         osh.warning(f"  synth: context is {len(ctx)} chars, truncating to {_CONTEXT_MAX_CHARS}")
         ctx = ctx[:_CONTEXT_MAX_CHARS]
-    ctx_block = ("\n\nContexte fourni par l'utilisateur (participants et rôles, noms propres, "
-                 "sigles, enjeux). Sers-t'en pour orthographier correctement les noms propres "
-                 "et bien cadrer les notes, mais N'INVENTE AUCUN fait absent de la transcription:\n"
-                 + ctx) if ctx else ""
+    ctx_block = (
+        (
+            "\n\nContexte fourni par l'utilisateur (participants et rôles, noms propres, "
+            "sigles, enjeux). Sers-t'en pour orthographier correctement les noms propres "
+            "et bien cadrer les notes, mais N'INVENTE AUCUN fait absent de la transcription:\n"
+            + ctx
+        )
+        if ctx
+        else ""
+    )
     map_sys = _MAP_SYS.format(lang=language) + ctx_block
     reduce_sys = _REDUCE_SYS.format(lang=language) + ctx_block
     duree = _hhmmss(transcript[-1]["t1"]) if transcript else "0:00:00"
-    meta = {"titre": title or "Compte-rendu", "date": date or datetime.date.today().isoformat(),
-            "horaire": "", "lieu": lieu, "duree": duree,
-            "audio_sources": audio_sources or []}
+    meta = {
+        "titre": title or "Compte-rendu",
+        "date": date or datetime.date.today().isoformat(),
+        "horaire": "",
+        "lieu": lieu,
+        "duree": duree,
+        "audio_sources": audio_sources or [],
+    }
 
     # Map step. Each chunk is isolated: a long meeting fans out into dozens of
     # map calls, and a single chunk that errors (transport hiccup) or returns
@@ -464,12 +510,13 @@ def synthesize(transcript: list[dict], speakers: dict, *, title: str = "",
     map_ok = 0
     chunks = list(_chunks(transcript, names))
     for i, chunk in enumerate(chunks):
-        osh.info(f"  synth map {i+1}/{len(chunks)}...")
+        osh.info(f"  synth map {i + 1}/{len(chunks)}...")
         try:
-            c = _ollama([{"role": "system", "content": map_sys},
-                         {"role": "user", "content": chunk}], model)
+            c = _ollama(
+                [{"role": "system", "content": map_sys}, {"role": "user", "content": chunk}], model
+            )
         except Exception as e:
-            osh.warning(f"  synth map {i+1} failed: {e}")
+            osh.warning(f"  synth map {i + 1} failed: {e}")
             continue
         part = _json_loads_lax(c)  # never raises; {} when unparseable
         if part:
@@ -488,9 +535,12 @@ def synthesize(transcript: list[dict], speakers: dict, *, title: str = "",
         # very long meetings, so we truncate defensively at 24k chars.
         notes = json.dumps(partials, ensure_ascii=False)[:24000]
         try:
-            final = _json_loads_lax(_ollama(
-                [{"role": "system", "content": reduce_sys},
-                 {"role": "user", "content": notes}], model))
+            final = _json_loads_lax(
+                _ollama(
+                    [{"role": "system", "content": reduce_sys}, {"role": "user", "content": notes}],
+                    model,
+                )
+            )
         except Exception as e:
             osh.warning(f"  synth reduce failed ({e}) -> minimal heuristic synthese")
             final = {}
@@ -527,15 +577,24 @@ def _heuristic(transcript: list[dict], names: dict) -> dict:
     Chapters are sampled at ~8 evenly-spaced utterances; ``max(1, ...)`` guards
     against a zero step on very short transcripts.
     """
-    resume = ["(Synthèse locale indisponible — Ollama non joignable. "
-              "Transcription et diarisation restent complètes ci-dessous.)"]
+    resume = [
+        "(Synthèse locale indisponible — Ollama non joignable. "
+        "Transcription et diarisation restent complètes ci-dessous.)"
+    ]
     chapters: list[dict] = []
     step = max(1, len(transcript) // 8)
     for i in range(0, len(transcript), step):
         u = transcript[i]
         chapters.append({"t": u["t0"], "titre": u["text"][:60], "resume": ""})
-    return {"resume": resume, "points_cles": [], "decisions": [], "actions": [],
-            "chapitres": chapters, "themes": [], "citations": []}
+    return {
+        "resume": resume,
+        "points_cles": [],
+        "decisions": [],
+        "actions": [],
+        "chapitres": chapters,
+        "themes": [],
+        "citations": [],
+    }
 
 
 def load_speakers(mapping_path: str, transcript: list[dict]) -> dict:

@@ -31,6 +31,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 from ._timefmt import seconds as _seconds
@@ -65,7 +66,7 @@ def _hhmmss(s: float | int | str | None) -> str:
     # ("28"), as floats, or already formatted ("0:00:28") — so accept all forms
     # rather than raising and aborting the whole render.
     s = _seconds(s)
-    return f"{s//3600:d}:{(s%3600)//60:02d}:{s%60:02d}"
+    return f"{s // 3600:d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
 
 
 def render_markdown(transcript: list[dict], syn: dict, *, include_transcript: bool = True) -> str:
@@ -107,11 +108,15 @@ def render_markdown(transcript: list[dict], syn: dict, *, include_transcript: bo
     L.append(f"# {meta.get('titre', 'Compte-rendu')}\n")
     # Metadata line: build all bits, then drop the ones whose value is empty or a
     # placeholder dash so we never render "Lieu : —" for meetings with no place.
-    bits = [f"**Date** : {meta.get('date','')}", f"**Lieu** : {meta.get('lieu','') or '—'}",
-            f"**Durée** : {meta.get('duree','')}"]
-    L.append("  ·  ".join(b for b in bits if b.split(':', 1)[1].strip() not in ("", "—")))
-    parts = ", ".join(f"{i['name']}" + (f" ({i['role']})" if i.get("role") else "")
-                      for i in speakers.values())
+    bits = [
+        f"**Date** : {meta.get('date', '')}",
+        f"**Lieu** : {meta.get('lieu', '') or '—'}",
+        f"**Durée** : {meta.get('duree', '')}",
+    ]
+    L.append("  ·  ".join(b for b in bits if b.split(":", 1)[1].strip() not in ("", "—")))
+    parts = ", ".join(
+        f"{i['name']}" + (f" ({i['role']})" if i.get("role") else "") for i in speakers.values()
+    )
     if parts:
         L.append(f"\n**Participants** : {parts}\n")
 
@@ -126,7 +131,9 @@ def render_markdown(transcript: list[dict], syn: dict, *, include_transcript: bo
     if syn.get("decisions"):
         L.append("\n## Décisions\n")
         for d in syn["decisions"]:
-            L.append(f"- ✓ **{d['decision']}**" + (f" — {d['contexte']}" if d.get("contexte") else ""))
+            L.append(
+                f"- ✓ **{d['decision']}**" + (f" — {d['contexte']}" if d.get("contexte") else "")
+            )
     if syn.get("actions"):
         # Actions render as a three-column Markdown table with dash placeholders
         # for any missing responsable / échéance.
@@ -134,11 +141,14 @@ def render_markdown(transcript: list[dict], syn: dict, *, include_transcript: bo
         L.append("| Action | Responsable | Échéance |")
         L.append("|---|---|---|")
         for a in syn["actions"]:
-            L.append(f"| {a['action']} | {a.get('responsable','—')} | {a.get('echeance','—')} |")
+            L.append(f"| {a['action']} | {a.get('responsable', '—')} | {a.get('echeance', '—')} |")
     if syn.get("chapitres"):
         L.append("\n## Chapitres\n")
         for c in syn["chapitres"]:
-            L.append(f"- `{_hhmmss(c['t'])}` **{c['titre']}**" + (f" — {c['resume']}" if c.get("resume") else ""))
+            L.append(
+                f"- `{_hhmmss(c['t'])}` **{c['titre']}**"
+                + (f" — {c['resume']}" if c.get("resume") else "")
+            )
     if syn.get("themes"):
         L.append("\n## Thèmes\n")
         for t in syn["themes"]:
@@ -155,6 +165,8 @@ def render_markdown(transcript: list[dict], syn: dict, *, include_transcript: bo
     if include_transcript and transcript:
         L.append("\n## Transcript\n")
         for u in transcript:
-            L.append(f"`{_hhmmss(u['t0'])}` **{names.get(u['speaker'], u['speaker'])}** : {u['text']}")
+            L.append(
+                f"`{_hhmmss(u['t0'])}` **{names.get(u['speaker'], u['speaker'])}** : {u['text']}"
+            )
     # Join once and guarantee a trailing newline for POSIX-friendly text files.
     return "\n".join(L) + "\n"

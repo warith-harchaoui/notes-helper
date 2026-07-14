@@ -17,6 +17,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import json
@@ -50,14 +51,21 @@ def sample_syn() -> dict:
         :func:`notes_helper.verify.verify_synthesis`.
     """
     return {
-        "meta": {"titre": "Réunion test", "date": "2026-07-10", "horaire": "",
-                 "lieu": "Paris", "duree": "0:00:09", "audio_sources": []},
-        "speakers": {"S0": {"name": "Alice", "role": "PM"},
-                     "S1": {"name": "Bob", "role": "Dev"}},
+        "meta": {
+            "titre": "Réunion test",
+            "date": "2026-07-10",
+            "horaire": "",
+            "lieu": "Paris",
+            "duree": "0:00:09",
+            "audio_sources": [],
+        },
+        "speakers": {"S0": {"name": "Alice", "role": "PM"}, "S1": {"name": "Bob", "role": "Dev"}},
         "resume": ["Le budget produit est doublé."],
         "points_cles": ["Budget doublé"],
         "decisions": [{"decision": "Doubler le budget produit", "contexte": "réunion test"}],
-        "actions": [{"action": "Cadrer le périmètre", "responsable": "Bob", "echeance": "2026-07-13"}],
+        "actions": [
+            {"action": "Cadrer le périmètre", "responsable": "Bob", "echeance": "2026-07-13"}
+        ],
         "chapitres": [{"t": 0, "titre": "Budget", "resume": ""}],
         "themes": [{"theme": "Produit", "points": ["budget"]}],
         "citations": [{"speaker": "S0", "texte": "On double le budget produit.", "t": 1}],
@@ -81,7 +89,9 @@ def out_dir(tmp_path, sample_transcript, sample_syn) -> str:
         Path to the directory, ready for :func:`notes_helper.outputs.render`.
     """
     (tmp_path / "transcript.json").write_text(
-        json.dumps(sample_transcript, ensure_ascii=False), encoding="utf-8")
+        json.dumps(sample_transcript, ensure_ascii=False), encoding="utf-8"
+    )
     (tmp_path / "synthese.json").write_text(
-        json.dumps(sample_syn, ensure_ascii=False), encoding="utf-8")
+        json.dumps(sample_syn, ensure_ascii=False), encoding="utf-8"
+    )
     return str(tmp_path)

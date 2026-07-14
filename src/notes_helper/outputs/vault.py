@@ -38,6 +38,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import os
@@ -97,7 +98,7 @@ def _hhmmss(s: float | int | str | None) -> str:
     # Local LLMs emit chapter/quote times as seconds, floats, or already
     # formatted strings; coerce tolerantly so one bad value cannot abort render.
     s = _seconds(s)
-    return f"{s//3600:d}:{(s%3600)//60:02d}:{s%60:02d}"
+    return f"{s // 3600:d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
 
 
 def _yaml_list(items: list[str]) -> str:
@@ -157,8 +158,9 @@ def _write_preserving(path: str, generated: str) -> None:
         f.write(generated.rstrip() + "\n\n" + MARKER + tail)
 
 
-def build_vault(transcript: list[dict], syn: dict, vault_dir: str, *,
-                audio_rel: str = "", report_rel: str = "") -> dict:
+def build_vault(
+    transcript: list[dict], syn: dict, vault_dir: str, *, audio_rel: str = "", report_rel: str = ""
+) -> dict:
     """Build an Obsidian vault (meeting note plus one note per speaker).
 
     Parameters
@@ -203,8 +205,12 @@ def build_vault(transcript: list[dict], syn: dict, vault_dir: str, *,
     meeting_name = f"{date} {title}".strip()
     # YAML front matter drives Obsidian's Dataview / metadata views.
     fm = [
-        "---", "type: meeting", f"date: {date}", f'lieu: "{meta.get("lieu","")}"',
-        f'duree: "{meta.get("duree","")}"', f"participants: {_yaml_list(links)}",
+        "---",
+        "type: meeting",
+        f"date: {date}",
+        f'lieu: "{meta.get("lieu", "")}"',
+        f'duree: "{meta.get("duree", "")}"',
+        f"participants: {_yaml_list(links)}",
     ]
     if audio_rel:
         fm.append(f'audio: "[[{audio_rel}]]"')
@@ -215,9 +221,14 @@ def build_vault(transcript: list[dict], syn: dict, vault_dir: str, *,
     if syn.get("resume"):
         body.append("## Résumé\n" + "\n\n".join(syn["resume"]) + "\n")
     if syn.get("decisions"):
-        body.append("## Décisions\n" + "\n".join(
-            f"- ✓ **{d['decision']}**" + (f" — {d['contexte']}" if d.get("contexte") else "")
-            for d in syn["decisions"]) + "\n")
+        body.append(
+            "## Décisions\n"
+            + "\n".join(
+                f"- ✓ **{d['decision']}**" + (f" — {d['contexte']}" if d.get("contexte") else "")
+                for d in syn["decisions"]
+            )
+            + "\n"
+        )
     if syn.get("actions"):
         # Tasks-plugin checkboxes with [[assignee]] + due date -> cross-meeting ledger.
         lines = []
@@ -246,11 +257,11 @@ def build_vault(transcript: list[dict], syn: dict, vault_dir: str, *,
     written_people = []
     for _sid, info in speakers.items():
         name = info["name"]
-        p_fm = ["---", "type: person", f'role: "{info.get("role","")}"']
+        p_fm = ["---", "type: person", f'role: "{info.get("role", "")}"']
         # Carry the voiceprint id when known so future runs can re-identify the
         # same speaker across meetings.
         if info.get("person_id"):
-            p_fm.append(f'voiceprint_id: {info["person_id"]}')
+            p_fm.append(f"voiceprint_id: {info['person_id']}")
         p_fm.append("---")
         p_body = "\n".join(p_fm) + f"\n\n# {name}\n"
         p_path = os.path.join(vault_dir, "People", f"{_slug(name)}.md")

@@ -22,6 +22,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -39,8 +40,9 @@ def _rng(seed: int) -> np.random.Generator:
     return np.random.default_rng(seed)
 
 
-def _speaker_blob(center: np.ndarray, n: int, jitter: float,
-                  rng: np.random.Generator) -> np.ndarray:
+def _speaker_blob(
+    center: np.ndarray, n: int, jitter: float, rng: np.random.Generator
+) -> np.ndarray:
     """Make ``n`` unit-norm 192-d embeddings jittered around ``center``."""
     v = center + jitter * rng.standard_normal((n, 192)).astype(np.float32)
     return v / np.linalg.norm(v, axis=1, keepdims=True)
@@ -58,8 +60,10 @@ def test_cluster_centroids_raw() -> None:
 def test_enroll_then_identify(tmp_path) -> None:
     """Assert enrolled voices re-identify as auto and a stranger stays unknown."""
     rng = _rng(42)
-    ca = rng.standard_normal(192).astype(np.float32); ca /= np.linalg.norm(ca)
-    cb = rng.standard_normal(192).astype(np.float32); cb /= np.linalg.norm(cb)
+    ca = rng.standard_normal(192).astype(np.float32)
+    ca /= np.linalg.norm(ca)
+    cb = rng.standard_normal(192).astype(np.float32)
+    cb /= np.linalg.norm(cb)
 
     # --- meeting 1: two speakers, enrolled by name ---
     Xa, Xb = _speaker_blob(ca, 8, 0.05, rng), _speaker_blob(cb, 8, 0.05, rng)
@@ -72,10 +76,15 @@ def test_enroll_then_identify(tmp_path) -> None:
 
     # --- meeting 2: same two voices (fresh jitter) + one stranger ---
     rng2 = _rng(7)
-    cs = rng2.standard_normal(192).astype(np.float32); cs /= np.linalg.norm(cs)
-    X2 = np.vstack([_speaker_blob(cb, 6, 0.05, rng2),   # cluster 0 = Bob
-                    _speaker_blob(ca, 6, 0.05, rng2),   # cluster 1 = Alice
-                    _speaker_blob(cs, 6, 0.05, rng2)])  # cluster 2 = unknown
+    cs = rng2.standard_normal(192).astype(np.float32)
+    cs /= np.linalg.norm(cs)
+    X2 = np.vstack(
+        [
+            _speaker_blob(cb, 6, 0.05, rng2),  # cluster 0 = Bob
+            _speaker_blob(ca, 6, 0.05, rng2),  # cluster 1 = Alice
+            _speaker_blob(cs, 6, 0.05, rng2),
+        ]
+    )  # cluster 2 = unknown
     labels2 = np.array([0] * 6 + [1] * 6 + [2] * 6)
     mp = identify_recording(X2, labels2, store)
 

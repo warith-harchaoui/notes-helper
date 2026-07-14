@@ -16,6 +16,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import pytest
@@ -31,7 +32,7 @@ _HEURISTIC_MARK = "Ollama non joignable"
     [
         ('{"a": 1}', {"a": 1}),
         ('sure! {"a": 1} hope that helps', {"a": 1}),
-        ('{"a": 1, "b":', {}),          # truncated
+        ('{"a": 1, "b":', {}),  # truncated
         ("total garbage, no json", {}),
         ("", {}),
     ],
@@ -73,6 +74,7 @@ def test_synthesize_survives_some_bad_chunks(monkeypatch: pytest.MonkeyPatch) ->
     calls = {"map": 0}
 
     def fake_ollama(messages, model, **kw):
+        """Stub ``_ollama``: valid JSON on reduce, alternating good/garbage on map."""
         system = messages[0]["content"]
         if "rédacteur de compte-rendu" in system:  # the reduce step
             return reduce_out
@@ -81,8 +83,12 @@ def test_synthesize_survives_some_bad_chunks(monkeypatch: pytest.MonkeyPatch) ->
         return good_map if calls["map"] % 2 == 0 else "oops {not json"
 
     monkeypatch.setattr(synth, "_ollama", fake_ollama)
-    out = synth.synthesize(_long_transcript(), {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
-                           language="fr", model="test")
+    out = synth.synthesize(
+        _long_transcript(),
+        {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
+        language="fr",
+        model="test",
+    )
 
     assert calls["map"] >= 2, "transcript should span several map chunks"
     assert out["resume"] == ["Vrai résumé fusionné."]
@@ -91,12 +97,18 @@ def test_synthesize_survives_some_bad_chunks(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_synthesize_falls_back_when_llm_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
     """When every map call errors, synth degrades to the heuristic — no crash."""
+
     def boom(messages, model, **kw):
+        """Stub ``_ollama`` that always errors, simulating an unreachable server."""
         raise ConnectionError("ollama down")
 
     monkeypatch.setattr(synth, "_ollama", boom)
-    out = synth.synthesize(_long_transcript(), {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
-                           language="fr", model="test")
+    out = synth.synthesize(
+        _long_transcript(),
+        {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
+        language="fr",
+        model="test",
+    )
 
     assert _HEURISTIC_MARK in " ".join(out["resume"])
 
@@ -107,18 +119,26 @@ def test_context_is_injected_into_map_and_reduce_prompts(monkeypatch: pytest.Mon
     seen = {"map": False, "reduce": False}
 
     def fake_ollama(messages, model, **kw):
+        """Stub ``_ollama`` that records whether ``marker`` reached each prompt."""
         system = messages[0]["content"]
         if "rédacteur de compte-rendu" in system:  # reduce step
             seen["reduce"] = marker in system
-            return ('{"resume":["ok"],"points_cles":[],"decisions":[],"actions":[],'
-                    '"chapitres":[],"themes":[],"citations":[]}')
+            return (
+                '{"resume":["ok"],"points_cles":[],"decisions":[],"actions":[],'
+                '"chapitres":[],"themes":[],"citations":[]}'
+            )
         # map step
         seen["map"] = seen["map"] or (marker in system)
         return '{"points":["p"],"decisions":[],"actions":[],"citations":[],"themes":["t"]}'
 
     monkeypatch.setattr(synth, "_ollama", fake_ollama)
-    synth.synthesize(_long_transcript(), {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
-                     language="fr", model="test", context=marker)
+    synth.synthesize(
+        _long_transcript(),
+        {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
+        language="fr",
+        model="test",
+        context=marker,
+    )
 
     assert seen["map"], "context should be appended to the map system prompt"
     assert seen["reduce"], "context should be appended to the reduce system prompt"
@@ -129,15 +149,23 @@ def test_empty_context_leaves_prompts_unchanged(monkeypatch: pytest.MonkeyPatch)
     captured: list[str] = []
 
     def fake_ollama(messages, model, **kw):
+        """Stub ``_ollama`` that captures each system prompt for later assertions."""
         captured.append(messages[0]["content"])
         if "rédacteur de compte-rendu" in messages[0]["content"]:
-            return ('{"resume":["ok"],"points_cles":[],"decisions":[],"actions":[],'
-                    '"chapitres":[],"themes":[],"citations":[]}')
+            return (
+                '{"resume":["ok"],"points_cles":[],"decisions":[],"actions":[],'
+                '"chapitres":[],"themes":[],"citations":[]}'
+            )
         return '{"points":["p"],"decisions":[],"actions":[],"citations":[],"themes":["t"]}'
 
     monkeypatch.setattr(synth, "_ollama", fake_ollama)
-    synth.synthesize(_long_transcript(), {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
-                     language="fr", model="test", context="   ")
+    synth.synthesize(
+        _long_transcript(),
+        {"S0": {"name": "S0"}, "S1": {"name": "S1"}},
+        language="fr",
+        model="test",
+        context="   ",
+    )
 
     assert captured, "the LLM should have been called"
     assert all("Contexte fourni par l'utilisateur" not in s for s in captured)

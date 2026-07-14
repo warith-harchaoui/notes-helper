@@ -24,6 +24,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import time
@@ -34,9 +35,14 @@ import os_helper as osh
 from .config import DEFAULT_LANGUAGE, SR, WHISPER_MODEL
 
 
-def transcribe(audio: np.ndarray, turns: list[dict], *,
-               language: str = DEFAULT_LANGUAGE, model: str = WHISPER_MODEL,
-               initial_prompt: str = "") -> list[dict]:
+def transcribe(
+    audio: np.ndarray,
+    turns: list[dict],
+    *,
+    language: str = DEFAULT_LANGUAGE,
+    model: str = WHISPER_MODEL,
+    initial_prompt: str = "",
+) -> list[dict]:
     """Transcribe each speaker turn into a time-stamped utterance.
 
     Parameters
@@ -68,17 +74,23 @@ def transcribe(audio: np.ndarray, turns: list[dict], *,
     from vocal_helper.asr import WhisperStage
     from vocal_helper.types import DiarizedSegment
 
-    stage = WhisperStage(model=model, language=language,
-                         word_timestamps=False, initial_prompt=initial_prompt)
+    stage = WhisperStage(
+        model=model, language=language, word_timestamps=False, initial_prompt=initial_prompt
+    )
     stage._ensure_model()
 
     out: list[dict] = []
     n = len(turns)
     t0 = time.time()
     for k, tn in enumerate(turns):
-        pcm = audio[int(tn["t0"] * SR):int(tn["t1"] * SR)]
-        seg = DiarizedSegment(t0=tn["t0"], t1=tn["t1"], sample_rate=SR,
-                              speaker=f"S{tn['spk']}", pcm=pcm.astype(np.float32, copy=False))
+        pcm = audio[int(tn["t0"] * SR) : int(tn["t1"] * SR)]
+        seg = DiarizedSegment(
+            t0=tn["t0"],
+            t1=tn["t1"],
+            sample_rate=SR,
+            speaker=f"S{tn['spk']}",
+            pcm=pcm.astype(np.float32, copy=False),
+        )
         try:
             utt = stage._transcribe_blocking(seg)
             text = "" if utt is None else utt["text"].strip()
@@ -87,12 +99,18 @@ def transcribe(audio: np.ndarray, turns: list[dict], *,
             osh.warning(f"  asr fail turn {k}: {e}")
             text = ""
         if text:  # skip silent/failed turns so the transcript stays clean
-            out.append({"t0": round(tn["t0"], 2), "t1": round(tn["t1"], 2),
-                        "speaker": f"S{tn['spk']}", "text": text})
+            out.append(
+                {
+                    "t0": round(tn["t0"], 2),
+                    "t1": round(tn["t1"], 2),
+                    "speaker": f"S{tn['spk']}",
+                    "text": text,
+                }
+            )
         if (k + 1) % 100 == 0:
             # Linear-extrapolation ETA: cheap, and good enough since turns are
             # roughly uniform in cost.
             el = time.time() - t0
             eta = el / (k + 1) * (n - k - 1)
-            osh.info(f"  asr: {k + 1}/{n}  elapsed={el/60:.1f}m eta={eta/60:.1f}m")
+            osh.info(f"  asr: {k + 1}/{n}  elapsed={el / 60:.1f}m eta={eta / 60:.1f}m")
     return out

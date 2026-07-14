@@ -10,6 +10,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 from notes_helper.cli import audit_egress
@@ -18,7 +19,8 @@ from notes_helper.cli import audit_egress
 def test_audit_flags_external_url(tmp_path):
     """A report referencing an external URL makes the audit report a hit."""
     (tmp_path / "report.html").write_text(
-        '<a href="https://evil.example.com/x">x</a>', encoding="utf-8")
+        '<a href="https://evil.example.com/x">x</a>', encoding="utf-8"
+    )
     assert audit_egress(str(tmp_path)) >= 1
 
 

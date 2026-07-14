@@ -31,6 +31,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import re
@@ -40,14 +41,17 @@ from re import Pattern
 # Anchored at start (^) and applied repeatedly (see clean_text) because several
 # prefixes can stack on a single utterance.
 PREFIX: Pattern[str] = re.compile(
-    r"^\s*(Sujets\s*:|Intervenants\s*:|R&D\s*F?\s*:|R&D\b[\s:]*|-\s*Sous-titrage[^\n]*)", re.I)
+    r"^\s*(Sujets\s*:|Intervenants\s*:|R&D\s*F?\s*:|R&D\b[\s:]*|-\s*Sous-titrage[^\n]*)", re.I
+)
 
 # Subtitle-credit / broadcaster boilerplate that is never real dialogue. Used
 # both to reject short utterances outright and to excise the substring from
 # longer ones.
 JUNK: Pattern[str] = re.compile(
     r"(sous-titrage|radio-canada|amara\.org|crayon d.ontario|\bm\.d\.\b|"
-    r"société radio|sous-titres réalisés)", re.I)
+    r"société radio|sous-titres réalisés)",
+    re.I,
+)
 
 # Lone tokens that carry no content once isolated. Matched against a normalized
 # (lowercased, punctuation-stripped) form of the utterance.

@@ -33,6 +33,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -111,13 +112,33 @@ async def _run_vad(audio: np.ndarray) -> list[tuple[float, float]]:
     FR = SR * 30
 
     async def feeder() -> None:
+        """Push fixed-size PCM frames into ``inbox``, then a sentinel.
+
+        Returns
+        -------
+        None
+            Enqueues one :class:`PcmFrame` per 30-second slice of ``audio`` and a
+            trailing ``None`` sentinel so the VAD stage knows the stream is done.
+        """
+        # Walk the waveform in FR-sample strides; copy() detaches each frame from
+        # the shared buffer so the stage can hold it without aliasing surprises.
         for i in range(0, len(audio), FR):
-            await inbox.put(PcmFrame(t0=i / SR, sample_rate=SR, pcm=audio[i:i + FR].copy()))
+            await inbox.put(PcmFrame(t0=i / SR, sample_rate=SR, pcm=audio[i : i + FR].copy()))
         await inbox.put(None)  # sentinel: signals end-of-stream to the stage
 
     segs: list[tuple[float, float]] = []
 
     async def collector() -> None:
+        """Drain voiced spans from ``outbox`` into the enclosing ``segs`` list.
+
+        Returns
+        -------
+        None
+            Appends each ``(t0, t1)`` span emitted by the VAD stage until the
+            stage forwards the ``None`` sentinel, then stops.
+        """
+        # Consume until the stage relays the end-of-stream sentinel; every real
+        # item is a voiced span we coerce to plain floats for the caller.
         while True:
             item = await outbox.get()
             if item is None:  # stage propagates the sentinel when finished
@@ -149,7 +170,9 @@ def run_vad(audio: np.ndarray) -> list[tuple[float, float]]:
     return asyncio.run(_run_vad(audio))
 
 
-def embed_segments(audio: np.ndarray, segs: list[tuple[float, float]]) -> tuple[np.ndarray, np.ndarray]:
+def embed_segments(
+    audio: np.ndarray, segs: list[tuple[float, float]]
+) -> tuple[np.ndarray, np.ndarray]:
     """Compute a TitaNet speaker embedding for each voiced segment.
 
     Each segment is mapped to a 192-dim vector and L2-normalised, so it lives on
@@ -187,7 +210,7 @@ def embed_segments(audio: np.ndarray, segs: list[tuple[float, float]]) -> tuple[
     X = np.zeros((len(segs), TITANET_DIM), dtype=np.float32)
     ok = np.zeros(len(segs), dtype=bool)
     for k, (t0, t1) in enumerate(segs):
-        pcm = audio[int(t0 * SR):int(t1 * SR)]
+        pcm = audio[int(t0 * SR) : int(t1 * SR)]
         if pcm.shape[0] < int(0.25 * SR):
             continue  # too short to embed reliably; leave ok[k] = False
         try:
@@ -237,7 +260,9 @@ def _estimate_n_spk(Xc: np.ndarray, lo: int = 2, hi: int = 8) -> int:
         return max(1, len(Xc))
     best_k, best_s = lo, -1.0
     for k in range(lo, hi + 1):
-        lab = AgglomerativeClustering(n_clusters=k, metric="cosine", linkage="average").fit_predict(Xc)
+        lab = AgglomerativeClustering(n_clusters=k, metric="cosine", linkage="average").fit_predict(
+            Xc
+        )
         try:
             s = silhouette_score(Xc, lab, metric="cosine")
         except Exception:
@@ -288,8 +313,7 @@ def cluster(X: np.ndarray, ok: np.ndarray, n_spk: int | None = None) -> np.ndarr
     Xc = Xn - Xn.mean(0)  # remove the shared channel/room component
     Xc = Xc / (np.linalg.norm(Xc, axis=1, keepdims=True) + 1e-9)
     k = n_spk or _estimate_n_spk(Xc)
-    lab = AgglomerativeClustering(n_clusters=k, metric="cosine",
-                                  linkage="average").fit_predict(Xc)
+    lab = AgglomerativeClustering(n_clusters=k, metric="cosine", linkage="average").fit_predict(Xc)
     labels = -np.ones(len(X), dtype=int)
     labels[np.where(ok)[0]] = lab
     # Relabel S0.. by first appearance so speaker ids are stable across runs and
@@ -303,8 +327,12 @@ def cluster(X: np.ndarray, ok: np.ndarray, n_spk: int | None = None) -> np.ndarr
     return np.array([remap.get(l, -1) for l in labels], dtype=int)
 
 
-def merge_turns(segs: list[tuple[float, float]], labels: np.ndarray,
-                merge_gap_s: float = MERGE_GAP_S, max_turn_s: float = MAX_TURN_S) -> list[dict]:
+def merge_turns(
+    segs: list[tuple[float, float]],
+    labels: np.ndarray,
+    merge_gap_s: float = MERGE_GAP_S,
+    max_turn_s: float = MAX_TURN_S,
+) -> list[dict]:
     """Merge consecutive same-speaker segments into contiguous turns.
 
     Parameters
@@ -334,17 +362,21 @@ def merge_turns(segs: list[tuple[float, float]], labels: np.ndarray,
     for (t0, t1), lab in zip(segs, labels, strict=False):
         if lab < 0:
             continue
-        if turns and turns[-1]["spk"] == lab and \
-           t0 - turns[-1]["t1"] <= merge_gap_s and \
-           t1 - turns[-1]["t0"] <= max_turn_s:
+        if (
+            turns
+            and turns[-1]["spk"] == lab
+            and t0 - turns[-1]["t1"] <= merge_gap_s
+            and t1 - turns[-1]["t0"] <= max_turn_s
+        ):
             turns[-1]["t1"] = t1  # extend the current turn in place
         else:
             turns.append({"t0": t0, "t1": t1, "spk": int(lab)})
     return turns
 
 
-def diarize(audio: np.ndarray, n_spk: int | None = None
-            ) -> tuple[list[tuple[float, float]], np.ndarray, np.ndarray, np.ndarray, list[dict]]:
+def diarize(
+    audio: np.ndarray, n_spk: int | None = None
+) -> tuple[list[tuple[float, float]], np.ndarray, np.ndarray, np.ndarray, list[dict]]:
     """Run the full diarization pipeline on a waveform.
 
     Parameters

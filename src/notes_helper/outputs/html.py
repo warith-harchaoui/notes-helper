@@ -30,6 +30,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import html
@@ -67,7 +68,7 @@ def _hhmmss(s: float | int | str | None) -> str:
     # Local LLMs emit chapter/quote times as seconds, floats, or already
     # formatted strings; coerce tolerantly so one bad value cannot abort render.
     s = _seconds(s)
-    return f"{s//3600:d}:{(s%3600)//60:02d}:{s%60:02d}"
+    return f"{s // 3600:d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
 
 
 def esc(t: object) -> str:
@@ -159,63 +160,79 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
         f'<span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-white" '
         f'style="background:{color_of.get(sid, "#555")}">'
         f'<span class="h-2 w-2 rounded-full bg-white/80"></span>{esc(info["name"])}'
-        f'<span class="opacity-80 font-normal">· {esc(info.get("role",""))}</span></span>'
-        for sid, info in speakers.items())
+        f'<span class="opacity-80 font-normal">· {esc(info.get("role", ""))}</span></span>'
+        for sid, info in speakers.items()
+    )
 
     def ul(items: list, cls: str = "space-y-2") -> str:
         """Render a list of strings as a styled ``<ul>`` of escaped ``<li>`` items."""
-        lis = "".join(f'<li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></span><span>{esc(x)}</span></li>' for x in items)
+        lis = "".join(
+            f'<li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></span><span>{esc(x)}</span></li>'
+            for x in items
+        )
         return f'<ul class="{cls}">{lis}</ul>'
 
-    resume_html = "".join(f'<p class="mb-4 leading-relaxed">{esc(p)}</p>' for p in syn.get("resume", []))
+    resume_html = "".join(
+        f'<p class="mb-4 leading-relaxed">{esc(p)}</p>' for p in syn.get("resume", [])
+    )
     keypoints_html = ul(syn.get("points_cles", []))
 
     def dec_ctx(d: dict) -> str:
         """Render a decision's optional context as a muted paragraph (or nothing)."""
         c = d.get("contexte", "")
         return f'<p class="text-sm text-slate-500 mt-1">{esc(c)}</p>' if c else ""
+
     dec_html = "".join(
         '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">'
         '<div class="flex items-start gap-3"><span class="mt-0.5 text-emerald-600 dark:text-emerald-400">✓</span>'
         f'<div><p class="font-medium">{esc(d["decision"])}</p>{dec_ctx(d)}</div></div></div>'
-        for d in syn.get("decisions", []))
+        for d in syn.get("decisions", [])
+    )
 
     # Actions render as table rows; responsable/échéance fall back to a dash.
     act_rows = "".join(
         f'<tr class="border-b border-slate-100 dark:border-slate-800">'
         f'<td class="py-3 pr-4 align-top">{esc(a["action"])}</td>'
-        f'<td class="py-3 pr-4 align-top whitespace-nowrap"><span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-sm">{esc(a.get("responsable","—"))}</span></td>'
-        f'<td class="py-3 align-top whitespace-nowrap text-sm text-slate-500">{esc(a.get("echeance","—"))}</td></tr>'
-        for a in syn.get("actions", []))
+        f'<td class="py-3 pr-4 align-top whitespace-nowrap"><span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-sm">{esc(a.get("responsable", "—"))}</span></td>'
+        f'<td class="py-3 align-top whitespace-nowrap text-sm text-slate-500">{esc(a.get("echeance", "—"))}</td></tr>'
+        for a in syn.get("actions", [])
+    )
     actions_html = (
         '<div class="overflow-x-auto"><table class="w-full text-left"><thead>'
         '<tr class="border-b-2 border-slate-200 dark:border-slate-700 text-sm uppercase tracking-wide text-slate-500">'
         '<th class="py-2 pr-4 font-semibold">Action</th><th class="py-2 pr-4 font-semibold">Responsable</th>'
         '<th class="py-2 font-semibold">Échéance</th></tr></thead>'
-        f'<tbody>{act_rows}</tbody></table></div>')
+        f"<tbody>{act_rows}</tbody></table></div>"
+    )
 
     # Chapter buttons carry a data-t timestamp so JS can seek the player to them.
     chap_html = "".join(
         f'<button class="chapter group flex w-full items-start gap-4 rounded-xl border border-slate-200 dark:border-slate-700 p-4 text-left transition hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10" data-t="{c["t"]}">'
         f'<span class="mt-0.5 shrink-0 rounded-lg bg-slate-900 dark:bg-slate-700 px-2.5 py-1 font-mono text-xs text-white">{_hhmmss(c["t"])}</span>'
         f'<span><span class="block font-medium group-hover:text-emerald-700 dark:group-hover:text-emerald-400">{esc(c["titre"])}</span>'
-        f'<span class="mt-1 block text-sm text-slate-500">{esc(c.get("resume",""))}</span></span></button>'
-        for c in syn.get("chapitres", []))
+        f'<span class="mt-1 block text-sm text-slate-500">{esc(c.get("resume", ""))}</span></span></button>'
+        for c in syn.get("chapitres", [])
+    )
 
     themes_html = "".join(
         f'<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-5">'
         f'<h3 class="mb-2 font-semibold text-emerald-700 dark:text-emerald-400">{esc(t["theme"])}</h3>'
-        f'{ul(t["points"])}</div>' for t in syn.get("themes", []))
+        f"{ul(t['points'])}</div>"
+        for t in syn.get("themes", [])
+    )
 
     def quote_html(q: dict) -> str:
         """Render one citation as a coloured blockquote with speaker attribution."""
         sid = resolve_spk(q.get("speaker", ""))
         col = color_of.get(sid, "#555")
         who = spk_name(sid) or q.get("speaker", "")
-        ts = f' · {_hhmmss(q["t"])}' if q.get("t") is not None else ""
-        return (f'<figure class="rounded-xl border-l-4 p-4 bg-slate-50 dark:bg-slate-800/50" style="border-color:{col}">'
-                f'<blockquote class="italic">« {esc(q["texte"])} »</blockquote>'
-                f'<figcaption class="mt-2 text-sm text-slate-500">— {esc(who)}{esc(ts)}</figcaption></figure>')
+        ts = f" · {_hhmmss(q['t'])}" if q.get("t") is not None else ""
+        return (
+            f'<figure class="rounded-xl border-l-4 p-4 bg-slate-50 dark:bg-slate-800/50" style="border-color:{col}">'
+            f'<blockquote class="italic">« {esc(q["texte"])} »</blockquote>'
+            f'<figcaption class="mt-2 text-sm text-slate-500">— {esc(who)}{esc(ts)}</figcaption></figure>'
+        )
+
     quotes_html = "".join(quote_html(q) for q in syn.get("citations", []))
 
     # Transcript rows: each utterance carries data-spk and a lowercased data-text
@@ -227,20 +244,27 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
             f'<div class="utt flex gap-3 py-2" data-spk="{sid}" data-text="{esc(u["text"]).lower()}">'
             f'<button class="ts shrink-0 font-mono text-xs text-slate-400 hover:text-emerald-600" data-t="{u["t0"]}">{_hhmmss(u["t0"])}</button>'
             f'<div><span class="mr-2 font-semibold" style="color:{color_of.get(sid, "#555")}">{esc(spk_name(sid))}</span>'
-            f'<span>{esc(u["text"])}</span></div></div>')
+            f"<span>{esc(u['text'])}</span></div></div>"
+        )
     transcript_html = "".join(tr_rows)
     spk_filter_btns = "".join(
         f'<button class="spk-filter rounded-full border px-3 py-1 text-sm font-medium" data-spk="{sid}" '
-        f'style="border-color:{color_of.get(sid,"#555")};color:{color_of.get(sid,"#555")}">{esc(info["name"])}</button>'
-        for sid, info in speakers.items())
+        f'style="border-color:{color_of.get(sid, "#555")};color:{color_of.get(sid, "#555")}">{esc(info["name"])}</button>'
+        for sid, info in speakers.items()
+    )
 
     # Audio sources: prefer an explicit list, else synthesise one from a single
     # audio path; the player block is omitted entirely when there is no audio.
-    sources = meta.get("audio_sources") or ([{"src": meta["audio"], "type": "audio/mpeg"}] if meta.get("audio") else [])
+    sources = meta.get("audio_sources") or (
+        [{"src": meta["audio"], "type": "audio/mpeg"}] if meta.get("audio") else []
+    )
     src_tags = "".join(f'<source src="{esc(s["src"])}" type="{esc(s["type"])}">' for s in sources)
     audio_block = (
         f'<audio id="player" controls preload="none" class="w-full">{src_tags}'
-        f'<a href="{esc(sources[0]["src"])}">Télécharger l\'audio</a></audio>' if src_tags else "")
+        f'<a href="{esc(sources[0]["src"])}">Télécharger l\'audio</a></audio>'
+        if src_tags
+        else ""
+    )
 
     # Tab definitions: (id, label, pre-rendered inner HTML). The transcript tab's
     # inner HTML is None here and assembled below because it needs the search UI.
@@ -257,9 +281,10 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
     # The first tab is styled active; the rest get the muted/hover treatment.
     tab_btns = "".join(
         f'<button class="tab-btn whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition '
-        f'{"border-emerald-600 text-emerald-700 dark:text-emerald-400" if i==0 else "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"}" '
+        f'{"border-emerald-600 text-emerald-700 dark:text-emerald-400" if i == 0 else "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"}" '
         f'data-tab="{tid}">{esc(label)}</button>'
-        for i, (tid, label, _) in enumerate(tabs))
+        for i, (tid, label, _) in enumerate(tabs)
+    )
 
     def panel(tid: str, inner: str, first: bool) -> str:
         """Wrap a tab's inner HTML in its ``<section>``; hide all but the first."""
@@ -276,7 +301,8 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
                 'class="w-full max-w-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent px-3 py-2 text-sm">'
                 f'<div class="flex flex-wrap gap-2">{spk_filter_btns}</div>'
                 '<button id="reset-filter" class="text-sm text-slate-400 underline">tout afficher</button></div>'
-                f'<div id="transcript" class="divide-y divide-slate-100 dark:divide-slate-800">{transcript_html}</div>')
+                f'<div id="transcript" class="divide-y divide-slate-100 dark:divide-slate-800">{transcript_html}</div>'
+            )
         panels.append(panel(tid, inner, i == 0))
     panels_html = "".join(panels)
 
@@ -307,13 +333,13 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
     <p class="mb-2 text-sm font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Compte-rendu</p>
     <h1 class="text-3xl font-bold sm:text-4xl">{esc(meta["titre"])}</h1>
     <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500">
-      <span>📅 {esc(meta.get("date",""))}</span>
-      <span>🕘 {esc(meta.get("horaire",""))}</span>
-      <span>📍 {esc(meta.get("lieu",""))}</span>
-      <span>⏱️ {esc(meta.get("duree",""))}</span>
+      <span>📅 {esc(meta.get("date", ""))}</span>
+      <span>🕘 {esc(meta.get("horaire", ""))}</span>
+      <span>📍 {esc(meta.get("lieu", ""))}</span>
+      <span>⏱️ {esc(meta.get("duree", ""))}</span>
     </div>
     <div class="mt-5 flex flex-wrap gap-2">{part_chips}</div>
-    {f'<div class="mt-6 no-print">{audio_block}</div>' if audio_block else ''}
+    {f'<div class="mt-6 no-print">{audio_block}</div>' if audio_block else ""}
   </div>
 </header>
 <nav class="no-print sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur">

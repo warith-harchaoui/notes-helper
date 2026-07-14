@@ -24,6 +24,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import json
@@ -71,13 +72,23 @@ def to_wav16k(src: str, dst: str) -> str:
         raise RuntimeError("ffmpeg not found on PATH (needed to decode audio)")
     subprocess.run(
         ["ffmpeg", "-y", "-i", src, "-ac", "1", "-ar", str(SR), "-f", "wav", dst],
-        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     return dst
 
 
-def run(audio_path: str, out_dir: str, *, n_spk: int | None = None,
-        language: str = "fr", initial_prompt: str = "", identify: bool = True,
-        db_path: str = DB_PATH) -> dict:
+def run(
+    audio_path: str,
+    out_dir: str,
+    *,
+    n_spk: int | None = None,
+    language: str = "fr",
+    initial_prompt: str = "",
+    identify: bool = True,
+    db_path: str = DB_PATH,
+) -> dict:
     """Run the full local pipeline on one audio file.
 
     Parameters
@@ -120,7 +131,7 @@ def run(audio_path: str, out_dir: str, *, n_spk: int | None = None,
         shutil.copyfile(audio_path, wav)
 
     audio = _diar.load_audio(wav)
-    osh.info(f"audio: {len(audio)/SR/60:.1f} min")
+    osh.info(f"audio: {len(audio) / SR / 60:.1f} min")
 
     segs, labels, X, ok, turns = _diar.diarize(audio, n_spk=n_spk)
     # Checkpoint the diarization so a later crash (or an identity re-run) does not
@@ -133,13 +144,18 @@ def run(audio_path: str, out_dir: str, *, n_spk: int | None = None,
     if identify:
         try:
             from .identity import PeopleStore, identify_recording
+
             store = PeopleStore(db_path)
             mapping = identify_recording(X, labels, store)
             store.close()
             mapping_path = os.path.join(out_dir, "speaker_mapping.json")
             with open(mapping_path, "w") as f:
-                json.dump({"mapping": {k: v["name"] for k, v in mapping.items()},
-                           "detail": mapping}, f, ensure_ascii=False, indent=2)
+                json.dump(
+                    {"mapping": {k: v["name"] for k, v in mapping.items()}, "detail": mapping},
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
             dbg = ", ".join(f"{k}->{v['name']}({v['mode']})" for k, v in mapping.items())
             osh.info(f"identity: {dbg}")
         except Exception as e:
@@ -155,8 +171,13 @@ def run(audio_path: str, out_dir: str, *, n_spk: int | None = None,
         json.dump(cleaned, f, ensure_ascii=False, indent=1)
     osh.info(f"=== done: {len(cleaned)} utterances -> {tr_path} ===")
 
-    return {"wav": wav, "checkpoint": ckpt, "transcript": tr_path,
-            "speaker_mapping": mapping_path, "out_dir": out_dir}
+    return {
+        "wav": wav,
+        "checkpoint": ckpt,
+        "transcript": tr_path,
+        "speaker_mapping": mapping_path,
+        "out_dir": out_dir,
+    }
 
 
 def _is_16k_mono(wav_path: str) -> bool:
@@ -176,6 +197,7 @@ def _is_16k_mono(wav_path: str) -> bool:
     """
     try:
         import soundfile as sf
+
         info = sf.info(wav_path)
         return info.samplerate == SR and info.channels == 1
     except Exception:

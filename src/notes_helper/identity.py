@@ -51,6 +51,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import argparse
@@ -66,10 +67,10 @@ from scipy.optimize import linear_sum_assignment
 # --------------------------------------------------------------------------- #
 # module constants
 # --------------------------------------------------------------------------- #
-EMB_DIM: int = 192              # TitaNet embedding size (matches diar_pipeline)
-EXEMPLAR_CAP: int = 64          # bounded per-person exemplar ring
-TAU_HIGH: float = 0.62          # cosine >= this => auto-assign
-TAU_LOW: float = 0.45           # [TAU_LOW, TAU_HIGH) => suggest ("is this X?"); < => unknown
+EMB_DIM: int = 192  # TitaNet embedding size (matches diar_pipeline)
+EXEMPLAR_CAP: int = 64  # bounded per-person exemplar ring
+TAU_HIGH: float = 0.62  # cosine >= this => auto-assign
+TAU_LOW: float = 0.45  # [TAU_LOW, TAU_HIGH) => suggest ("is this X?"); < => unknown
 
 # Default store location: an env override, else a per-user dotfile. Numeric
 # voiceprints only — never audio — so it is small and portable.
@@ -299,8 +300,13 @@ class PeopleStore:
         ).fetchone()
         if not r:
             return None
-        return {"id": r[0], "name": r[1], "role": r[2],
-                "centroid": self._unblob(r[3]), "n_exemplars": r[4]}
+        return {
+            "id": r[0],
+            "name": r[1],
+            "role": r[2],
+            "centroid": self._unblob(r[3]),
+            "n_exemplars": r[4],
+        }
 
     def all_people(self) -> list[dict]:
         """List every enrolled person, ordered by name (no centroids loaded).
@@ -312,7 +318,9 @@ class PeopleStore:
             sorted alphabetically by name. Centroids are intentionally omitted
             to keep the listing cheap.
         """
-        rows = self.db.execute("SELECT id,name,role,n_exemplars FROM person ORDER BY name").fetchall()
+        rows = self.db.execute(
+            "SELECT id,name,role,n_exemplars FROM person ORDER BY name"
+        ).fetchall()
         return [{"id": a, "name": b, "role": c, "n_exemplars": d} for a, b, c, d in rows]
 
     def centroids(self) -> dict[str, np.ndarray]:
@@ -387,8 +395,9 @@ class PeopleStore:
         if not rows:
             return
         M = np.vstack([self._unblob(b) for (b,) in rows]).mean(0)
-        self.db.execute("INSERT OR REPLACE INTO meta(k,v) VALUES('global_mean',?)",
-                        (self._blob(M),))
+        self.db.execute(
+            "INSERT OR REPLACE INTO meta(k,v) VALUES('global_mean',?)", (self._blob(M),)
+        )
         self.db.commit()
 
     # -- writes ------------------------------------------------------------- #
@@ -412,8 +421,9 @@ class PeopleStore:
             pid, i = f"{base}-{i}", i + 1
         return pid
 
-    def add_person(self, name: str, centroid: np.ndarray, exemplars: np.ndarray,
-                   role: str = "") -> str:
+    def add_person(
+        self, name: str, centroid: np.ndarray, exemplars: np.ndarray, role: str = ""
+    ) -> str:
         """Create a new person and seed it with exemplars.
 
         Parameters
@@ -444,7 +454,8 @@ class PeopleStore:
         self.db.execute(
             "INSERT INTO person(id,name,role,centroid,n_exemplars,created_at,updated_at)"
             " VALUES(?,?,?,?,?,?,?)",
-            (pid, name, role, self._blob(l2(centroid)), 0, now, now))
+            (pid, name, role, self._blob(l2(centroid)), 0, now, now),
+        )
         self.db.commit()
         self.push_exemplars(pid, exemplars)
         return pid
@@ -478,10 +489,15 @@ class PeopleStore:
         now = time.time()
         self.db.executemany(
             "INSERT INTO exemplar(person_id,emb,source,ts) VALUES(?,?,?,?)",
-            [(pid, self._blob(e), "run", now) for e in embs])
+            [(pid, self._blob(e), "run", now) for e in embs],
+        )
         # bounded ring: drop the oldest exemplars beyond `cap`
-        ids = [r[0] for r in self.db.execute(
-            "SELECT rowid FROM exemplar WHERE person_id=? ORDER BY ts DESC", (pid,)).fetchall()]
+        ids = [
+            r[0]
+            for r in self.db.execute(
+                "SELECT rowid FROM exemplar WHERE person_id=? ORDER BY ts DESC", (pid,)
+            ).fetchall()
+        ]
         for rid in ids[cap:]:
             self.db.execute("DELETE FROM exemplar WHERE rowid=?", (rid,))
         # recompute the centroid from the surviving exemplars only
@@ -489,7 +505,8 @@ class PeopleStore:
         if len(ex):
             self.db.execute(
                 "UPDATE person SET centroid=?, n_exemplars=?, updated_at=? WHERE id=?",
-                (self._blob(l2(ex.mean(0))), len(ex), now, pid))
+                (self._blob(l2(ex.mean(0))), len(ex), now, pid),
+            )
         self.db.commit()
 
     def delete(self, pid: str) -> None:
@@ -601,10 +618,13 @@ def _apply_global_mean(vecs: dict, gmean: np.ndarray | None) -> dict:
     return {k: l2(v - g) for k, v in vecs.items()}
 
 
-def identify(cluster_cents: dict[int, np.ndarray],
-             people: dict[str, np.ndarray],
-             tau_high: float = TAU_HIGH, tau_low: float = TAU_LOW,
-             gmean: np.ndarray | None = None) -> dict[int, tuple]:
+def identify(
+    cluster_cents: dict[int, np.ndarray],
+    people: dict[str, np.ndarray],
+    tau_high: float = TAU_HIGH,
+    tau_low: float = TAU_LOW,
+    gmean: np.ndarray | None = None,
+) -> dict[int, tuple]:
     """Assign clusters to enrolled people 1-to-1, gated by cosine thresholds.
 
     Parameters
@@ -653,14 +673,19 @@ def identify(cluster_cents: dict[int, np.ndarray],
             s = float(S[i, j])
             mode = "auto" if s >= tau_high else ("suggest" if s >= tau_low else "unknown")
             out[ks[i]] = (ps[j] if mode != "unknown" else None, s, mode)
-    for k in ks:                       # clusters with no viable match
+    for k in ks:  # clusters with no viable match
         out.setdefault(k, (None, 0.0, "unknown"))
     return out
 
 
-def identify_recording(X: np.ndarray, labels: np.ndarray, store: PeopleStore,
-                       tau_high: float = TAU_HIGH, tau_low: float = TAU_LOW,
-                       use_global_mean: bool = False) -> dict[str, dict]:
+def identify_recording(
+    X: np.ndarray,
+    labels: np.ndarray,
+    store: PeopleStore,
+    tau_high: float = TAU_HIGH,
+    tau_low: float = TAU_LOW,
+    use_global_mean: bool = False,
+) -> dict[str, dict]:
     """Map a recording's clusters to enrolled people, end to end.
 
     Parameters
@@ -700,16 +725,21 @@ def identify_recording(X: np.ndarray, labels: np.ndarray, store: PeopleStore,
     mapping: dict[str, dict] = {}
     for k, (pid, score, mode) in sorted(res.items()):
         name = store.get(pid)["name"] if pid else f"S{k}"
-        mapping[f"S{k}"] = {"name": name, "person_id": pid,
-                            "confidence": round(score, 3), "mode": mode}
+        mapping[f"S{k}"] = {
+            "name": name,
+            "person_id": pid,
+            "confidence": round(score, 3),
+            "mode": mode,
+        }
     return mapping
 
 
 # --------------------------------------------------------------------------- #
 # enrollment
 # --------------------------------------------------------------------------- #
-def enroll_cluster(store: PeopleStore, X: np.ndarray, labels: np.ndarray,
-                   cluster_k: int, name: str, role: str = "") -> str:
+def enroll_cluster(
+    store: PeopleStore, X: np.ndarray, labels: np.ndarray, cluster_k: int, name: str, role: str = ""
+) -> str:
     """Name a cluster once, creating a new person from its RAW embeddings.
 
     Parameters
@@ -753,8 +783,9 @@ def enroll_cluster(store: PeopleStore, X: np.ndarray, labels: np.ndarray,
     return pid
 
 
-def reinforce(store: PeopleStore, pid: str, X: np.ndarray, labels: np.ndarray,
-              cluster_k: int) -> None:
+def reinforce(
+    store: PeopleStore, pid: str, X: np.ndarray, labels: np.ndarray, cluster_k: int
+) -> None:
     """Refine an existing voiceprint from a confident later re-match.
 
     Parameters
@@ -900,7 +931,8 @@ def main() -> None:
     p.add_argument("--role", default="")
 
     sub.add_parser("list", help="list enrolled people")
-    p = sub.add_parser("forget", help="delete a person"); p.add_argument("person_id")
+    p = sub.add_parser("forget", help="delete a person")
+    p.add_argument("person_id")
     sub.add_parser("calibrate", help="suggest thresholds from the store")
 
     a = ap.parse_args()
@@ -910,8 +942,12 @@ def main() -> None:
         X, labels = _load_ckpt(a.checkpoint)
         mp = identify_recording(X, labels, store, use_global_mean=a.global_mean)
         with open(a.out, "w") as f:
-            json.dump({"mapping": {k: v["name"] for k, v in mp.items()},
-                       "detail": mp}, f, ensure_ascii=False, indent=2)
+            json.dump(
+                {"mapping": {k: v["name"] for k, v in mp.items()}, "detail": mp},
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
         # Program output: the resolved mapping table for the operator.
         for k, v in mp.items():
             print(f"  {k} -> {v['name']:24s} conf={v['confidence']:.3f} ({v['mode']})")
@@ -927,8 +963,7 @@ def main() -> None:
     elif a.cmd == "list":
         # Program output: one row per enrolled person.
         for p in store.all_people():
-            print(f"  {p['id']:24s} {p['name']:24s} {p['role']:16s} "
-                  f"({p['n_exemplars']} exemplars)")
+            print(f"  {p['id']:24s} {p['name']:24s} {p['role']:16s} ({p['n_exemplars']} exemplars)")
 
     elif a.cmd == "forget":
         store.delete(a.person_id)

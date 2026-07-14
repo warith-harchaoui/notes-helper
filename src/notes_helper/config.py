@@ -34,6 +34,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import json
@@ -134,7 +135,7 @@ def _resolve(key: str, default: str) -> str:
 
 
 # --- audio / ASR ----------------------------------------------------------- #
-SR: int = 16000                                 # working sample rate (mono float32)
+SR: int = 16000  # working sample rate (mono float32)
 # NOTE: legacy env var name preserved via _resolve("WHISPER_MODEL") ==
 # NOTES_HELPER_WHISPER_MODEL, so existing overrides keep working.
 WHISPER_MODEL: str = _resolve("WHISPER_MODEL", "large-v3-turbo-q5_0")
@@ -146,8 +147,8 @@ DEFAULT_LANGUAGE: str = _resolve("LANG", "fr")
 # original pipeline where the participant count was known). Never env-driven, so
 # it keeps its literal default with no precedence layering.
 DEFAULT_N_SPK: int | None = None
-MERGE_GAP_S: float = 0.8                         # merge same-speaker gaps below this
-MAX_TURN_S: float = 28.0                         # cap a merged turn before forcing a cut
+MERGE_GAP_S: float = 0.8  # merge same-speaker gaps below this
+MAX_TURN_S: float = 28.0  # cap a merged turn before forcing a cut
 
 # --- local LLM synthesis (Ollama on localhost) ----------------------------- #
 # Localhost by default: the "remote" endpoint is only remote if an operator

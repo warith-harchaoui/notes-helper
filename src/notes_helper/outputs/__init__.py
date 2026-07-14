@@ -27,6 +27,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import json
@@ -76,7 +77,8 @@ def _load(out_dir: str) -> tuple[list[dict], dict]:
     # explicitly instead of failing with an opaque JSON error downstream.
     if not os.path.exists(syn_path):
         raise FileNotFoundError(
-            f"{syn_path} missing — run `notes-helper synth {out_dir}` first (local Ollama).")
+            f"{syn_path} missing — run `notes-helper synth {out_dir}` first (local Ollama)."
+        )
     # A synthese.json may have been produced by an older notes-helper, another tool,
     # or edited by hand; normalise it to the renderers' expected schema so a
     # drifted field shape cannot crash rendering.

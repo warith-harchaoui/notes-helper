@@ -10,6 +10,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 from notes_helper.outputs.markdown import render_markdown

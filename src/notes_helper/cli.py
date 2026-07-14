@@ -35,6 +35,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import argparse
@@ -63,8 +64,15 @@ def _cmd_run(a: argparse.Namespace) -> None:
     """
     # Lazy import: the ASR/diarization stack is heavy and only needed here.
     from .pipeline import run
-    res = run(a.audio, a.out, n_spk=a.speakers, language=a.lang,
-              initial_prompt=a.prompt or "", identify=not a.no_identify)
+
+    res = run(
+        a.audio,
+        a.out,
+        n_spk=a.speakers,
+        language=a.lang,
+        initial_prompt=a.prompt or "",
+        identify=not a.no_identify,
+    )
     print(json.dumps(res, indent=2))
 
 
@@ -83,14 +91,22 @@ def _cmd_synth(a: argparse.Namespace) -> None:
         Writes ``<dir>/synthese.json`` and prints its path to stdout.
     """
     from .synth import load_speakers, synthesize
+
     tr = json.load(open(os.path.join(a.dir, "transcript.json"), encoding="utf-8"))
     speakers = load_speakers(os.path.join(a.dir, "speaker_mapping.json"), tr)
     # A --context-file (if readable) takes precedence over inline --context.
     context = a.context or ""
     if getattr(a, "context_file", ""):
         context = open(a.context_file, encoding="utf-8").read()
-    syn = synthesize(tr, speakers, title=a.title or os.path.basename(a.dir.rstrip("/")),
-                     lieu=a.lieu or "", model=a.model, language=a.lang, context=context)
+    syn = synthesize(
+        tr,
+        speakers,
+        title=a.title or os.path.basename(a.dir.rstrip("/")),
+        lieu=a.lieu or "",
+        model=a.model,
+        language=a.lang,
+        context=context,
+    )
     out = os.path.join(a.dir, "synthese.json")
     json.dump(syn, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"wrote {out}")  # user-facing result: where the artifact landed
@@ -111,6 +127,7 @@ def _cmd_report(a: argparse.Namespace) -> None:
         Prints one ``format -> path`` line per rendered artifact to stdout.
     """
     from .outputs import render
+
     # Accept a comma-separated list and drop empty entries from stray commas.
     formats = [f.strip() for f in a.format.split(",") if f.strip()]
     written = render(a.dir, formats, vault_dir=a.vault or "")
@@ -133,7 +150,9 @@ def _cmd_all(a: argparse.Namespace) -> None:
         Delegates to :func:`_cmd_run`, :func:`_cmd_synth` and
         :func:`_cmd_report`, each of which prints its own result.
     """
-    _cmd_run(a); _cmd_synth(a); _cmd_report(a)
+    _cmd_run(a)
+    _cmd_synth(a)
+    _cmd_report(a)
 
 
 def _cmd_enroll(a: argparse.Namespace) -> None:
@@ -151,6 +170,7 @@ def _cmd_enroll(a: argparse.Namespace) -> None:
         Prints the newly assigned person id to stdout.
     """
     from .identity import PeopleStore, _load_ckpt, enroll_cluster
+
     X, labels = _load_ckpt(a.checkpoint)
     store = PeopleStore(a.db)
     # cluster is passed like "S0"/"s3"; strip the leading S to get the int index.
@@ -174,13 +194,18 @@ def _cmd_identify(a: argparse.Namespace) -> None:
         and prints a per-cluster confidence table to stdout.
     """
     from .identity import PeopleStore, _load_ckpt, identify_recording
+
     X, labels = _load_ckpt(a.checkpoint)
     store = PeopleStore(a.db)
     mp = identify_recording(X, labels, store)
     store.close()
     out = a.out or "speaker_mapping.json"
-    json.dump({"mapping": {k: v["name"] for k, v in mp.items()}, "detail": mp},
-              open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    json.dump(
+        {"mapping": {k: v["name"] for k, v in mp.items()}, "detail": mp},
+        open(out, "w", encoding="utf-8"),
+        ensure_ascii=False,
+        indent=2,
+    )
     for k, v in mp.items():
         print(f"  {k} -> {v['name']:24s} conf={v['confidence']:.3f} ({v['mode']})")
 
@@ -201,6 +226,7 @@ def _cmd_people(a: argparse.Namespace) -> None:
         confirmation.
     """
     from .identity import PeopleStore
+
     store = PeopleStore(a.db)
     if a.action == "list":
         for p in store.all_people():
@@ -259,6 +285,7 @@ def audit_egress(path: str) -> int:
     ``errors="ignore"`` so a stray binary/encoding hiccup cannot abort the audit.
     """
     import re
+
     pat = re.compile(r"https?://")
     files = glob.glob(os.path.join(path, "**", "*.html"), recursive=True)
     files += glob.glob(os.path.join(path, "**", "*.md"), recursive=True)
@@ -289,19 +316,27 @@ def main(argv: Sequence[str] | None = None) -> None:
         Executes the matched handler for its side effects (files written,
         results printed). May exit non-zero via a handler (e.g. ``audit``).
     """
-    ap = argparse.ArgumentParser(prog="notes-helper", description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        prog="notes-helper",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     ap.add_argument("--version", action="version", version=f"notes-helper {__version__}")
     # DB path default mirrors config.DB_PATH's env/home fallback so the CLI and
     # library agree on where voiceprints live.
-    ap.add_argument("--db", default=os.environ.get("NOTES_HELPER_DB",
-                    os.path.expanduser("~/.notes-helper/people.db")))
+    ap.add_argument(
+        "--db",
+        default=os.environ.get("NOTES_HELPER_DB", os.path.expanduser("~/.notes-helper/people.db")),
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def add_synth_report_args(p: argparse.ArgumentParser) -> None:
         """Attach the arguments shared by the ``synth``/``report``/``all`` subcommands."""
-        p.add_argument("--title", default=""); p.add_argument("--lieu", default="")
-        p.add_argument("--model", default=os.environ.get("NOTES_HELPER_OLLAMA_MODEL", "qwen2.5:32b"))
+        p.add_argument("--title", default="")
+        p.add_argument("--lieu", default="")
+        p.add_argument(
+            "--model", default=os.environ.get("NOTES_HELPER_OLLAMA_MODEL", "qwen2.5:32b")
+        )
         p.add_argument("--lang", default="fr")
         p.add_argument("--format", default="html")
         p.add_argument("--vault", default="")
@@ -310,35 +345,56 @@ def main(argv: Sequence[str] | None = None) -> None:
         p.add_argument("--context", default="")
         p.add_argument("--context-file", default="")
 
-    p = sub.add_parser("run"); p.add_argument("audio"); p.add_argument("--out", required=True)
-    p.add_argument("--speakers", type=int, default=None); p.add_argument("--lang", default="fr")
-    p.add_argument("--prompt", default=""); p.add_argument("--no-identify", action="store_true")
+    p = sub.add_parser("run")
+    p.add_argument("audio")
+    p.add_argument("--out", required=True)
+    p.add_argument("--speakers", type=int, default=None)
+    p.add_argument("--lang", default="fr")
+    p.add_argument("--prompt", default="")
+    p.add_argument("--no-identify", action="store_true")
     p.set_defaults(func=_cmd_run)
 
-    p = sub.add_parser("synth"); p.add_argument("dir"); add_synth_report_args(p)
+    p = sub.add_parser("synth")
+    p.add_argument("dir")
+    add_synth_report_args(p)
     p.set_defaults(func=_cmd_synth)
 
-    p = sub.add_parser("report"); p.add_argument("dir"); add_synth_report_args(p)
+    p = sub.add_parser("report")
+    p.add_argument("dir")
+    add_synth_report_args(p)
     p.set_defaults(func=_cmd_report)
 
-    p = sub.add_parser("all"); p.add_argument("audio"); p.add_argument("--out", required=True, dest="out")
-    p.add_argument("--speakers", type=int, default=None); p.add_argument("--prompt", default="")
-    p.add_argument("--no-identify", action="store_true"); add_synth_report_args(p)
+    p = sub.add_parser("all")
+    p.add_argument("audio")
+    p.add_argument("--out", required=True, dest="out")
+    p.add_argument("--speakers", type=int, default=None)
+    p.add_argument("--prompt", default="")
+    p.add_argument("--no-identify", action="store_true")
+    add_synth_report_args(p)
     # 'dir' is derived from --out (see set_defaults below); hide it from help.
     p.add_argument("dir", nargs="?", help=argparse.SUPPRESS)
     p.set_defaults(func=lambda a: (setattr(a, "dir", a.out), _cmd_all(a)))
 
-    p = sub.add_parser("enroll"); p.add_argument("checkpoint")
-    p.add_argument("--cluster", required=True); p.add_argument("--name", required=True)
-    p.add_argument("--role", default=""); p.set_defaults(func=_cmd_enroll)
+    p = sub.add_parser("enroll")
+    p.add_argument("checkpoint")
+    p.add_argument("--cluster", required=True)
+    p.add_argument("--name", required=True)
+    p.add_argument("--role", default="")
+    p.set_defaults(func=_cmd_enroll)
 
-    p = sub.add_parser("identify"); p.add_argument("checkpoint"); p.add_argument("--out", default="")
+    p = sub.add_parser("identify")
+    p.add_argument("checkpoint")
+    p.add_argument("--out", default="")
     p.set_defaults(func=_cmd_identify)
 
-    p = sub.add_parser("people"); p.add_argument("action", choices=["list", "forget"])
-    p.add_argument("person_id", nargs="?"); p.set_defaults(func=_cmd_people)
+    p = sub.add_parser("people")
+    p.add_argument("action", choices=["list", "forget"])
+    p.add_argument("person_id", nargs="?")
+    p.set_defaults(func=_cmd_people)
 
-    p = sub.add_parser("audit"); p.add_argument("dir"); p.set_defaults(func=_cmd_audit)
+    p = sub.add_parser("audit")
+    p.add_argument("dir")
+    p.set_defaults(func=_cmd_audit)
 
     a = ap.parse_args(argv)
     a.func(a)

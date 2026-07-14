@@ -17,6 +17,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import json
@@ -44,11 +45,11 @@ def test_seconds_accepts_heterogeneous_forms() -> None:
 def test_normalize_coerces_drifted_shapes() -> None:
     """A synthesis with wrong-typed fields is coerced into the render schema."""
     drifted = {
-        "resume": "un seul paragraphe",            # str where a list is expected
-        "points_cles": None,                        # missing -> empty list
+        "resume": "un seul paragraphe",  # str where a list is expected
+        "points_cles": None,  # missing -> empty list
         "themes": [{"theme": ["A", "B"], "points": "solo"}],  # list title, scalar points
-        "citations": ["une phrase orpheline"],      # bare string, not an object
-        "chapitres": [{"t": "0:00:28", "titre": "Intro"}],    # formatted timestamp
+        "citations": ["une phrase orpheline"],  # bare string, not an object
+        "chapitres": [{"t": "0:00:28", "titre": "Intro"}],  # formatted timestamp
     }
     out = normalize_synthese(drifted)
     assert out["resume"] == ["un seul paragraphe"]

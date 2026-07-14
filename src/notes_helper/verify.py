@@ -33,6 +33,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import re
@@ -200,8 +201,9 @@ def verify_synthesis(transcript: list[dict], syn: dict) -> VerificationReport:
     # 1. Citations must be traceable to the transcript and to a known speaker.
     for i, q in enumerate(syn.get("citations", []) or []):
         q_tokens = _tokens(q.get("texte", ""))
-        best = max((_jaccard(q_tokens, _tokens(u.get("text", ""))) for u in transcript),
-                   default=0.0)
+        best = max(
+            (_jaccard(q_tokens, _tokens(u.get("text", ""))) for u in transcript), default=0.0
+        )
         if best < GROUNDING_THRESHOLD:
             issues.append(f"citation[{i}] not grounded in transcript (overlap={best:.2f})")
         spk = q.get("speaker", "")

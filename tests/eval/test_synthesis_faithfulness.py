@@ -26,6 +26,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import json
@@ -94,16 +95,20 @@ def _faithfulness(transcript: list[dict], summary: str) -> float:
     return float(metric.score)
 
 
-@pytest.mark.skipif(os.environ.get("NOTES_HELPER_RUN_EVAL") != "1",
-                    reason="set NOTES_HELPER_RUN_EVAL=1 (and a local DeepEval judge) to run AI evals")
+@pytest.mark.skipif(
+    os.environ.get("NOTES_HELPER_RUN_EVAL") != "1",
+    reason="set NOTES_HELPER_RUN_EVAL=1 (and a local DeepEval judge) to run AI evals",
+)
 @pytest.mark.parametrize("case", _load_cases(), ids=lambda c: c["name"])
 def test_summary_faithfulness(case: dict) -> None:
     """Each golden case must meet its faithfulness threshold with a local judge."""
     score = _faithfulness(case["transcript"], case["summary"])
     if "min_faithfulness" in case:
         assert score >= case["min_faithfulness"], (
-            f"{case['name']}: faithfulness {score:.2f} < {case['min_faithfulness']}")
+            f"{case['name']}: faithfulness {score:.2f} < {case['min_faithfulness']}"
+        )
     if "max_faithfulness" in case:
         # Hallucination negative: a fabricated summary must score LOW.
         assert score <= case["max_faithfulness"], (
-            f"{case['name']}: hallucinated summary scored too high ({score:.2f})")
+            f"{case['name']}: hallucinated summary scored too high ({score:.2f})"
+        )

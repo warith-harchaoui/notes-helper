@@ -52,6 +52,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import io
@@ -164,8 +165,12 @@ def synth(req: SynthRequest) -> dict:
     """
     transcript = [u.model_dump() for u in req.transcript]
     return synthesize(
-        transcript, req.speakers, title=req.title, lieu=req.lieu,
-        model=req.model, language=req.language,
+        transcript,
+        req.speakers,
+        title=req.title,
+        lieu=req.lieu,
+        model=req.model,
+        language=req.language,
     )
 
 

@@ -31,6 +31,7 @@ Author
 ------
 Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 """
+
 from __future__ import annotations
 
 import os
@@ -88,13 +89,16 @@ def compile_doc(md_path: str, out_path: str, fmt: str) -> str:
     # 1) Embeddable Python API (preferred — stays in-process, no subprocess).
     try:
         import md2star  # type: ignore
+
         for fn in ("convert", "render", "to_" + fmt, "md_to_" + fmt):
             f = getattr(md2star, fn, None)
             if callable(f):
                 try:
                     # convert/render take the format explicitly; the specialised
                     # to_<fmt>/md_to_<fmt> helpers already imply it.
-                    f(md_path, out_path, fmt) if fn in ("convert", "render") else f(md_path, out_path)
+                    f(md_path, out_path, fmt) if fn in ("convert", "render") else f(
+                        md_path, out_path
+                    )
                     return out_path
                 except TypeError:
                     # Wrong arity for this md2star version — try the next name.
@@ -111,7 +115,8 @@ def compile_doc(md_path: str, out_path: str, fmt: str) -> str:
 
     raise RuntimeError(
         "md2star not available — install with:  pip install 'notes-helper[docs]'  "
-        "(https://github.com/warith-harchaoui/md2star)")
+        "(https://github.com/warith-harchaoui/md2star)"
+    )
 
 
 def compile_all(md_path: str, out_dir: str, formats: Iterable[str], stem: str = "report") -> dict:
