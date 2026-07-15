@@ -143,3 +143,7 @@ python scripts/audit_egress.py output/   # garde-fou souveraineté
 ## Remerciements
 
 Remerciements chaleureux à [Mohamed Chelali](https://mchelali.github.io) et [Bachir Zerroug](https://www.linkedin.com/in/bachirzerroug) et [Alexandre Larmagnac](https://www.linkedin.com/in/alexandre-larmagnac-85b4619b/) pour nos échanges fructueux.
+
+## Licence
+
+`notes-helper` est distribué sous licence **Apache-2.0**. Voir [LICENSE](LICENSE).

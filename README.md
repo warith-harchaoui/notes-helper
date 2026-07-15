@@ -160,3 +160,7 @@ python scripts/audit_egress.py output/   # sovereignty gate
 ## Acknowledgements
 
 Special thanks to [Mohamed Chelali](https://mchelali.github.io) and [Bachir Zerroug](https://www.linkedin.com/in/bachirzerroug) and [Alexandre Larmagnac](https://www.linkedin.com/in/alexandre-larmagnac-85b4619b/) for fruitful discussions.
+
+## License
+
+`notes-helper` is licensed under **Apache-2.0**. See [LICENSE](LICENSE).
