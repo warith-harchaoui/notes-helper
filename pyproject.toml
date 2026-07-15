@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "notes-helper"
-version = "0.4.0"
+version = "0.4.1"
 description = "Fully-local, free, open-source diarized meeting recorder — nothing leaves your device unless you decide."
 readme = "README.md"
 requires-python = ">=3.10"

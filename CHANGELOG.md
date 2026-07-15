@@ -4,6 +4,14 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.4.1] - 2026-07-15
+
+### Documentation
+- Harmonize README/LISEZMOI to the AI Helpers common structure (single H1,
+  source install path pinned to v0.4.1, PyPI-coming-soon note); no code changes.
+
 ## [0.4.0] — 2026-07-14
 
 ### Added

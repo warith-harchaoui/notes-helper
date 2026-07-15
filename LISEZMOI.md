@@ -10,7 +10,7 @@
 
 Par [Warith HARCHAOUI](https://linkedin.com/in/warith-harchaoui) · [🌍 deraison.ai/fr/notes-helper](https://deraison.ai/fr/notes-helper)
 
-# Documentation
+## Documentation
 
 [💻 Documentation](https://harchaoui.org/warith/ai-helpers/docs/notes-helper-doc/)
 
@@ -46,21 +46,24 @@ Ce qui fonctionne aujourd'hui :
 - 🐧 **Ubuntu/Debian** : `sudo apt update && sudo apt install -y python3 python3-pip git ffmpeg` — puis Ollama via `curl -fsSL https://ollama.com/install.sh | sh`
 - 🪟 **Windows** (PowerShell) : `winget install Python.Python.3.12 Git.Git Gyan.FFmpeg Ollama.Ollama`
 
-Puis installez le paquet :
+### Depuis les sources
+
+Notes Helper n'est pas encore sur PyPI — installez depuis GitHub, épinglé au tag de version :
 
 ```bash
-pip install --force-reinstall --no-cache-dir \
-  git+https://github.com/warith-harchaoui/notes-helper.git@v0.1.0
+pip install "git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"
 ```
 
 Extras optionnels (au choix) :
 
 ```bash
-pip install 'notes-helper[process] @ git+…@v0.1.0'   # vocal-helper : VAD/diarisation/ASR
-pip install 'notes-helper[capture] @ git+…@v0.1.0'    # capture-helper : capture micro/écran
-pip install 'notes-helper[docs]    @ git+…@v0.1.0'    # md2star : export DOCX/PDF/PPTX
-pip install 'notes-helper[all]     @ git+…@v0.1.0'    # tout
+pip install "notes-helper[process] @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # vocal-helper : VAD/diarisation/ASR
+pip install "notes-helper[capture] @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # capture-helper : capture micro/écran
+pip install "notes-helper[docs]    @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # md2star : export DOCX/PDF/PPTX
+pip install "notes-helper[all]     @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # tout
 ```
+
+> **Publication PyPI bientôt disponible.**
 
 Il faut toujours `ffmpeg` dans le PATH (décodage/rééchantillonnage audio) et `ollama serve` en marche (synthèse locale) :
 

@@ -10,7 +10,7 @@
 
 By [Warith HARCHAOUI](https://linkedin.com/in/warith-harchaoui) · [🌍 deraison.ai/fr/notes-helper](https://deraison.ai/fr/notes-helper)
 
-# Documentation
+## Documentation
 
 [💻 Documentation](https://harchaoui.org/warith/ai-helpers/docs/notes-helper-doc/)
 
@@ -45,21 +45,24 @@ What ships today:
 - 🐧 **Ubuntu/Debian**: `sudo apt update && sudo apt install -y python3 python3-pip git ffmpeg` — then Ollama via `curl -fsSL https://ollama.com/install.sh | sh`
 - 🪟 **Windows** (PowerShell): `winget install Python.Python.3.12 Git.Git Gyan.FFmpeg Ollama.Ollama`
 
-Then install the package:
+### From source
+
+Notes Helper is not on PyPI yet — install from GitHub, pinned to the release tag:
 
 ```bash
-pip install --force-reinstall --no-cache-dir \
-  git+https://github.com/warith-harchaoui/notes-helper.git@v0.1.0
+pip install "git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"
 ```
 
 Optional extras (pick what you need):
 
 ```bash
-pip install 'notes-helper[process] @ git+…@v0.1.0'   # vocal-helper: VAD/diarization/ASR
-pip install 'notes-helper[capture] @ git+…@v0.1.0'    # capture-helper: mic/screen capture
-pip install 'notes-helper[docs]    @ git+…@v0.1.0'    # md2star: DOCX/PDF/PPTX export
-pip install 'notes-helper[all]     @ git+…@v0.1.0'    # everything
+pip install "notes-helper[process] @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # vocal-helper: VAD/diarization/ASR
+pip install "notes-helper[capture] @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # capture-helper: mic/screen capture
+pip install "notes-helper[docs]    @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # md2star: DOCX/PDF/PPTX export
+pip install "notes-helper[all]     @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # everything
 ```
+
+> **PyPI release coming soon.**
 
 You still need `ffmpeg` on PATH (audio decode/resample) and `ollama serve` running (local synthesis):
 
