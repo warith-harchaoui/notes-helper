@@ -1,0 +1,26 @@
+# Filesystem / decoding adapters for the native core.
+#
+# These are ADAPTERS (ports-and-adapters): they implement `nh-core`'s ports using real
+# I/O and codecs, and are kept out of the pure core crate. First adapter: a WAV audio
+# source. ffmpeg/symphonia-backed decoding for arbitrary containers lands alongside the
+# capture adapters (M3).
+[package]
+name = "nh-io"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Filesystem and decoding adapters for nh-core (WAV audio source, ...)."
+repository = "https://github.com/warith-harchaoui/notes-helper"
+publish = false
+
+[dependencies]
+# The core traits and domain types this crate adapts to.
+nh-core = { path = "../nh-core" }
+# Small, dependency-free WAV reader/writer — enough for the 16 kHz mono offline path.
+hound = "3"
+# Structured logging (e.g. to warn on unexpected sample rates).
+tracing = "0.1"
+
+[dev-dependencies]
+# Isolated temp directories for the WAV round-trip tests.
+tempfile = "3"

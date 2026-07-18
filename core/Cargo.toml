@@ -6,7 +6,7 @@
 # one `cargo test` across the whole native side.
 [workspace]
 resolver = "2"
-members = ["nh-core"]
+members = ["nh-core", "nh-io"]
 
 # Shared release profile tuning applies to every crate in the workspace.
 [profile.release]
