@@ -25,6 +25,10 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      # ffmpeg is the decoding backend used by nh-io's FfmpegSource tests.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       # Fail if any file is not rustfmt-clean.
       - name: Format check
         run: cargo fmt --all -- --check
