@@ -86,15 +86,25 @@ multi-source est portée dans les adaptateurs Rust.
 
 ---
 
-## 4. UI (Q2)
+## 4. UI (Q2 — aligné doctrine, ADR 0001)
 
-- **Desktop** : **Tauri v2** — backend = `nh-core` (Rust), UI = **web générée par les
-  skills `front-*`** (front-ui pour l'app, front-figures pour camemberts/Plutchik,
-  front-colors palettes CVD-safe, front-accessibility/ux-laws en garde-fous). Le
-  **rapport notes-helper-style** est le même HTML auto-suffisant, ouvrable hors app.
-- **Mobile (tôt)** : coquille sur le **même `nh-core`** via UniFFI. Choix Tauri-mobile
-  vs Flutter/natif tranché au moment d'attaquer le mobile (réversible : le cœur ne
-  bouge pas). Web-UI réutilisée si Tauri-mobile ; sinon UI native + rapport en WebView.
+- **Desktop** : **Tauri 2 + React + TypeScript (strict)** (Vite, pnpm) — backend =
+  `nh-core` (Rust). Les skills **front-\*** servent au **prototypage, aux audits**
+  (a11y/contraste/UX) et aux **figures** (front-figures Vega-Lite/Good Colors) ; leur
+  sortie vanilla-JS est **traduite** dans le système de composants React, ce n'est pas
+  la couche de prod. Le **rapport notes-helper-style** reste un HTML auto-suffisant.
+- **Mobile (tôt)** : **UI native** — **SwiftUI** (iOS) / **Kotlin+Compose** (Android)
+  sur le **même `nh-core`** via **UniFFI**. **Tauri-mobile = exception à ADR.**
+
+## 4bis. Stockage (doctrine, ADR 0001)
+
+- **SQLite** = état durable mutable : `IdentityVault` (locuteurs↔personnes), sessions,
+  réglages, **méta du cache modèles**, migrations. Adaptateur derrière le port.
+- **Polars** = calcul analytique : temps de parole, agrégation **émotions Plutchik**,
+  préparation des tables de figures, éval.
+- **Parquet/Arrow** = artefacts tabulaires + **corpus golden** (parité Python↔Rust).
+
+*(Diagrammes de ce doc à migrer d'ASCII vers **Mermaid** — convention doctrine.)*
 
 ---
 

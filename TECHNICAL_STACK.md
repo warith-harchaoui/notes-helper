@@ -42,15 +42,15 @@
 | Desktop (natif/C) | **ABI C** via `cbindgen` |
 | Flutter (si retenu mobile) | **flutter_rust_bridge** |
 
-## 4. Coquilles UI
+## 4. Coquilles UI  *(aligné doctrine — ADR 0001)*
 
 | Couche | Choix | Notes |
 |---|---|---|
-| Desktop | **Tauri v2** (backend Rust + WebView) | réutilise les skills **front-\*** |
-| UI web | **HTML + Tailwind + vanilla JS** générés par **front-ui** | rapport **notes-helper-style** auto-suffisant |
-| Figures | **Vega-Lite** via **front-figures** ; palettes CVD-safe **front-colors** | camemberts + roue de Plutchik ; boucles PNG en dev |
-| Mobile | **Tauri-mobile** *ou* **Flutter/natif** (décidé à M6) | même `nh-core` |
-| Garde-fous | **front-accessibility**, **front-ux-laws** | audits statiques CI |
+| Desktop | **Tauri 2 + React + TypeScript (strict)** (Vite, pnpm) | UI de prod en React ; rapport **notes-helper-style** = HTML auto-suffisant |
+| Mobile | **UniFFI + SwiftUI (iOS) / Kotlin+Compose (Android)** | UI **native** ; **Tauri-mobile = exception à ADR** |
+| Skills `front-*` | **prototype / audit / figures uniquement** | vanilla-JS = qualité prototype, à **traduire** en composants React ; audits a11y/contraste/UX en CI |
+| Figures | **Vega-Lite** (défaut) / **Vega** (bas niveau) via **front-figures**, palette **Good Colors** | camemberts + roue de Plutchik ; boucles PNG en dev ; spec = artefact versionné |
+| Diagrammes | **Mermaid** (archi/flux) | pas d'ASCII art ; Vega ≠ diagramme d'archi |
 
 ## 5. Entrée (graphe de sources « OBS », Q13)
 
@@ -114,3 +114,31 @@ derrière un port le temps que `nh-core` atteigne la parité). Outils Python : *
   **auditeur dataviz** (front-figures) ; **éval IA** gatée (WER/DER/fidélité/Plutchik).
 - Build natif : **cmake** + **clang** (whisper.cpp/ggml, sherpa-onnx, llama.cpp).
 - Matrice OS pour le cœur ; jobs mobiles (Xcode / Android SDK) à M6.
+
+## 12. Stockage — responsabilités séparées  *(doctrine — ADR 0001)*
+
+| Rôle | Choix | Possède |
+|---|---|---|
+| État durable mutable | **SQLite** | vault d'identité (locuteurs↔personnes), sessions, réglages, **méta du cache modèles**, migrations, index |
+| Calcul analytique | **Polars** | temps de parole/locuteur, agrégation **émotions Plutchik**, préparation des tables de figures, éval |
+| Artefacts tabulaires | **Parquet / Arrow** | gros datasets, **corpus golden** (parité), résultats intermédiaires, interchange cross-langage |
+
+Règle : un DataFrame Polars **n'est jamais** la source de vérité ; l'état transactionnel = SQLite.
+
+## 13. Évaluation IA  *(doctrine §14 / CODING.md règle 15)*
+
+Côté **Python** (l'éval reste en Python), gatée en CI, seuils versionnés :
+
+| Cible | Outil | Métriques |
+|---|---|---|
+| **Synthèse LLM** (résumé/décisions/actions) | **DeepEval** (juge = LLM **local** Ollama) | fidélité (faithfulness), hallucination, pertinence |
+| **Émotions Plutchik** | **DeepEval** / rubrique | accord vs référence |
+| Robustesse LLM/ML | **Giskard** | robustesse, biais, cas limites |
+| **ASR** | WER | vs corpus golden |
+| **Diarisation** | DER | vs corpus golden |
+
+Datasets golden dans `contracts/` ; harnais dans `contracts/evaluations/` (opt-in, coûts maîtrisés par cache).
+
+## 14. Parité Python→Rust  *(doctrine §3 / phase 3)*
+
+**PyO3 + maturin** exposent `nh-core` à Python ; **shadow-mode** compare Rust vs l'oracle Python `notes_helper` sur les **golden fixtures** (structure, valeurs, tolérances, erreurs, latence, mémoire) avant tout switch. Rollback vers Python toujours possible.

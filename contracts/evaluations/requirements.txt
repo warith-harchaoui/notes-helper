@@ -1,0 +1,6 @@
+# Evaluation-layer dependencies (opt-in; not part of the product runtime).
+# Installed only to run the DeepEval / Giskard evaluation suite locally or in a gated CI
+# job. The judge model itself is a local Ollama model — no hosted LLM is used.
+deepeval>=1.0
+giskard>=2.0
+pytest>=7
