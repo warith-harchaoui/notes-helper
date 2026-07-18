@@ -1,0 +1,28 @@
+# whisper.cpp ASR adapter for nh-core.
+#
+# The real FFI (via whisper-rs, which builds whisper.cpp) is HEAVY, so it sits behind the
+# `whisper-cpp` feature. The default build compiles a thin stub that returns a clear
+# error — this keeps `cargo test --all` and the core CI fast and green, while the real
+# engine is opt-in (`--features whisper-cpp`) and validated in a dedicated build.
+[package]
+name = "nh-whisper"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "whisper.cpp ASR adapter for nh-core (behind the `whisper-cpp` feature)."
+repository = "https://github.com/warith-harchaoui/notes-helper"
+publish = false
+
+[features]
+# Default is stub-only so no native C++ build happens unless explicitly requested.
+default = []
+# Enable the real whisper.cpp binding (pulls and builds whisper-rs).
+whisper-cpp = ["dep:whisper-rs"]
+
+[dependencies]
+# Core traits and domain types this adapter implements.
+nh-core = { path = "../nh-core" }
+# Structured logging.
+tracing = "0.1"
+# Real ASR backend; optional so it only builds under the `whisper-cpp` feature.
+whisper-rs = { version = "0.14", optional = true }

@@ -8,7 +8,7 @@
 //! never editing the core (ports-and-adapters; see `ARCHITECTURE.md`).
 
 use crate::error::Result;
-use crate::model::{AudioBuffer, MeetingContext, Report, Summary, Transcript};
+use crate::model::{AudioBuffer, MeetingContext, Report, Summary, Transcript, Utterance};
 
 /// Loads audio from a single, already-resolved offline source into a canonical
 /// [`AudioBuffer`].
@@ -25,14 +25,29 @@ pub trait AudioSource {
 
 /// Turns audio into a diarized, timestamped [`Transcript`].
 ///
-/// VAD + diarization (sherpa-onnx) and ASR (whisper.cpp) live behind this port; the
-/// core neither knows nor cares which engines back it.
+/// This is the composite the pipeline consumes; a real implementation combines an
+/// [`AsrEngine`] (text + timing) with a diarization pass (who-spoke-when) so the core
+/// neither knows nor cares which engines back it.
 pub trait TranscriptionEngine {
     /// Transcribe and diarize a whole buffer (offline, whole-buffer = best DER).
     ///
     /// # Errors
     /// Returns [`crate::error::CoreError::Transcription`] on engine failure.
     fn transcribe(&self, audio: &AudioBuffer) -> Result<Transcript>;
+}
+
+/// Turns audio into raw ASR utterances (text + timing) WITHOUT speaker attribution.
+///
+/// whisper.cpp lives behind this port; diarization (sherpa-onnx) assigns speakers in a
+/// separate step, and a composite adapter merges the two into a [`Transcript`]. Splitting
+/// ASR from diarization keeps each engine independently swappable and testable.
+pub trait AsrEngine {
+    /// Transcribe a whole buffer into time-stamped utterances; the speaker field is a
+    /// placeholder the diarization step overwrites.
+    ///
+    /// # Errors
+    /// Returns [`crate::error::CoreError::Transcription`] on engine failure.
+    fn transcribe(&self, audio: &AudioBuffer) -> Result<Vec<Utterance>>;
 }
 
 /// Produces the local-LLM [`Summary`] (llama.cpp behind this port).
