@@ -1,0 +1,30 @@
+# The platform-agnostic core of Notes Helper: the domain model, the ports
+# (ports-and-adapters seam) and the session orchestration. No OS code, no engine code —
+# those arrive as adapters/binding crates in later milestones (see PLAN.md, M1+).
+[package]
+name = "nh-core"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Shared, platform-agnostic engine for Notes Helper (offline/online diarized transcription + local synthesis)."
+repository = "https://github.com/warith-harchaoui/notes-helper"
+# Keep the published surface small and intentional if this is ever packaged.
+publish = false
+
+[dependencies]
+# Typed, ergonomic error enums for a library (no stringly-typed errors, no panics).
+thiserror = "2"
+# Structured logging surface — never `println!` in library code (CODING.md rule 6).
+tracing = "0.1"
+# Serialize the domain model (report → JSON/HTML upstream, config, identity packs).
+serde = { version = "1", features = ["derive"] }
+# Parse the model manifest and serialize the report (runtime, not just tests).
+serde_json = "1"
+# Verify downloaded model integrity (sha256) before trusting a cached file.
+sha2 = "0.10"
+# Hex-encode digests for comparison against the manifest's checksum strings.
+hex = "0.4"
+
+[dev-dependencies]
+# Isolated temp directories for the model-cache tests (no writing into the repo).
+tempfile = "3"

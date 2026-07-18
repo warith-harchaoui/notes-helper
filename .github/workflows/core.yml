@@ -1,0 +1,38 @@
+# CI for the native Rust core (`core/` workspace).
+#
+# Enforces the CODING.md quality bar for Rust: formatting, a clippy pass with warnings
+# promoted to errors, and the full test suite (unit + doctests + integration). Runs on
+# every push and pull request; a failure blocks the merge.
+name: core
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    # All steps run inside the workspace directory so `cargo` finds the workspace root.
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      # Check out the repository.
+      - uses: actions/checkout@v4
+
+      # Install a stable Rust toolchain with the components CI needs.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Fail if any file is not rustfmt-clean.
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      # Lint with clippy; -D warnings makes every lint blocking (CODING.md rule 15).
+      - name: Clippy (warnings as errors)
+        run: cargo clippy --all-targets -- -D warnings
+
+      # Run unit tests, doctests, and the integration wiring test.
+      - name: Tests
+        run: cargo test --all

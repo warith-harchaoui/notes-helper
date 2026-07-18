@@ -1,0 +1,5 @@
+# Rust build artifacts for the native core workspace.
+# The compiled output is large and reproducible from source, so it never goes in git.
+/target
+# Per-crate target dirs, should any crate build standalone.
+**/target

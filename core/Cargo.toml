@@ -1,0 +1,14 @@
+# Cargo workspace for the Notes Helper native core.
+#
+# The workspace groups the platform-agnostic engine crate (`nh-core`) and, in later
+# milestones, the engine-binding crates (whisper.cpp / sherpa-onnx / llama.cpp) and the
+# UniFFI/C-ABI wrapper crates. Keeping them in one workspace gives a single lockfile and
+# one `cargo test` across the whole native side.
+[workspace]
+resolver = "2"
+members = ["nh-core"]
+
+# Shared release profile tuning applies to every crate in the workspace.
+[profile.release]
+# Thin LTO trims binary size on mobile without the full-LTO build-time blow-up.
+lto = "thin"

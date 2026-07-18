@@ -1,0 +1,120 @@
+================================================================================
+ notes-helper — TECHNICAL REQUIREMENTS  (device par device / OS par OS)
+================================================================================
+
+Fichier de référence des prérequis pour FAIRE TOURNER l'app (utilisateur) et pour
+la COMPILER (dev), cible par cible. Voir aussi : ARCHITECTURE.md, TECHNICAL_STACK.md,
+TECHNICAL_QUESTIONS.md.
+
+Conventions :
+  [RUN]   = requis pour exécuter l'app / le cœur
+  [BUILD] = requis en plus pour compiler depuis les sources
+  [OPT]   = optionnel (fonctionnalité avancée)
+  Tiers modèles : DESKTOP = lourd (qualité max) · MOBILE = léger
+
+Principes transverses (toutes cibles) :
+  - Souverain : aucune connexion sortante en usage. Seule sortie = provisioning des
+    modèles depuis le FTP de Warith au 1er lancement (hash-vérifié, cache local),
+    plus tout partage/sync que l'utilisateur active explicitement.
+  - « Local file first » : chaque enregistrement = vrai fichier récupérable (m4a/mp4).
+  - Espace disque modèles : prévoir ~1-2 Go (mobile) à ~3-6 Go (desktop) selon tiers.
+
+--------------------------------------------------------------------------------
+ macOS  🍎   (première cible livrée)
+--------------------------------------------------------------------------------
+[RUN]   OS        : macOS 13 Ventura ou plus récent.
+[RUN]   Matériel  : Apple Silicon (M1+) recommandé (accélération Metal) ;
+                    Intel supporté en CPU. RAM 8 Go min, 16 Go recommandé pour
+                    les gros LLM/whisper.
+[RUN]   Moteurs   : whisper.cpp (Metal), sherpa-onnx (ONNX RT), llama.cpp (GGUF).
+[RUN]   Modèles   : tier DESKTOP (whisper large-v3-turbo q5_0, LLM GGUF >=3B,
+                    sherpa lourd).
+[BUILD] Toolchain : Rust (cargo), cmake, clang (Xcode Command Line Tools),
+                    ffmpeg. Xcode complet pour la coquille (Tauri/Swift).
+                    - macOS 🍎 : `brew install rust cmake ffmpeg`
+                      (installer `brew` grâce à https://brew.sh/)
+[OPT]   Audio sys.: capture multi-audio-système via device virtuel/loopback
+                    (ex. BlackHole) — pour le graphe de sources OBS (Q13).
+[OPT]   iCloud    : destination de sauvegarde récupérable (signalée « quitte
+                    l'appareil vers Apple »).
+        Egress    : aucun (hors provisioning modèles + partage/sync opt-in).
+
+--------------------------------------------------------------------------------
+ Ubuntu / Debian  🐧
+--------------------------------------------------------------------------------
+[RUN]   OS        : Ubuntu 22.04+ / Debian 12+ (ou équivalent récent).
+[RUN]   Matériel  : x86_64 ou ARM64. CPU par défaut ; GPU NVIDIA (CUDA) ou
+                    Vulkan accéléré si présent. RAM 8 Go min, 16 Go recommandé.
+[RUN]   Audio     : PulseAudio ou PipeWire (capture micro + monitor système),
+                    PortAudio.
+[RUN]   Modèles   : tier DESKTOP.
+[BUILD] Toolchain : Rust (cargo), cmake, build-essential (gcc/clang), ffmpeg,
+                    dev headers audio.
+                    - Ubuntu 🐧 : `sudo apt install cmake build-essential ffmpeg \
+                      portaudio19-dev libasound2-dev` ; Rust via https://rustup.rs
+        Egress    : aucun (idem principes transverses).
+
+--------------------------------------------------------------------------------
+ Windows  🪟
+--------------------------------------------------------------------------------
+[RUN]   OS        : Windows 10 (2004+) ou Windows 11.
+[RUN]   Matériel  : x86_64. CPU par défaut ; GPU CUDA ou DirectML si présent.
+                    RAM 8 Go min, 16 Go recommandé.
+[RUN]   Audio     : WASAPI (capture micro + loopback système).
+[RUN]   UI        : WebView2 Runtime (pour la coquille Tauri / l'export PDF).
+[RUN]   Modèles   : tier DESKTOP.
+[BUILD] Toolchain : Rust (cargo), cmake, MSVC Build Tools (ou clang), ffmpeg.
+                    - Windows 🪟 : `winget install Rustlang.Rustup Kitware.CMake \
+                      Gyan.FFmpeg Microsoft.VisualStudio.2022.BuildTools`
+        Egress    : aucun (idem principes transverses).
+
+--------------------------------------------------------------------------------
+ iOS  📱   (mobile prioritaire — avancé au plus tôt)
+--------------------------------------------------------------------------------
+[RUN]   OS        : iOS 16+ (viser 16/17 pour la mémoire disponible aux modèles).
+[RUN]   Matériel  : iPhone A14+ recommandé (RAM/NPU) ; modèles LÉGERS obligatoires.
+[RUN]   Moteurs   : whisper.cpp (CoreML/Metal), sherpa-onnx (ONNX RT iOS),
+                    llama.cpp (GGUF) ; MLX en option Apple.
+[RUN]   Capture   : AVAudioEngine — MICRO(S) uniquement. L'OS INTERDIT de capter
+                    l'audio d'une autre app (pas d'audio système d'un Zoom, etc.).
+[RUN]   Fichiers  : « local file first » → Documents exposé dans Fichiers +
+                    Photos (vidéo) + iCloud en option.
+[RUN]   Modèles   : tier MOBILE (whisper small/base quantizé, LLM GGUF 1-3B,
+                    sherpa léger) ; téléchargement à la demande depuis le FTP.
+[RUN]   Réseau    : app SANS network entitlement en usage (egress OS-enforced) ;
+                    seule exception = fenêtre de provisioning modèles.
+[BUILD] Toolchain : Xcode récent, Rust + cibles iOS, UniFFI, cmake/clang.
+        Store     : Apple Developer Program (99 $/an) pour la distribution.
+
+--------------------------------------------------------------------------------
+ Android  🤖
+--------------------------------------------------------------------------------
+[RUN]   OS        : Android 10 (API 29)+ (scoped storage / MediaStore).
+[RUN]   Matériel  : ARM64 ; accélération NNAPI/GPU si dispo ; modèles LÉGERS.
+[RUN]   Moteurs   : whisper.cpp, sherpa-onnx (Android), llama.cpp (GGUF).
+[RUN]   Capture   : AAudio/Oboe — MICRO(S) uniquement (pas d'audio d'autre app).
+[RUN]   Fichiers  : « local file first » → MediaStore (Recordings/Movies/Music)
+                    ou dossier choisi via SAF ; visible dans Fichiers/Galerie.
+[RUN]   Modèles   : tier MOBILE ; téléchargement à la demande depuis le FTP.
+[BUILD] Toolchain : Android SDK/NDK, Rust + cibles Android, UniFFI, cmake/clang.
+
+--------------------------------------------------------------------------------
+ Matrice de capacités (résumé)
+--------------------------------------------------------------------------------
+                         macOS   Ubuntu  Windows   iOS    Android
+Micro (1..N)              oui     oui     oui       oui    oui
+Audio système (1..N)      oui*    oui     oui       NON    NON      (*loopback)
+Caméra / écran            oui     oui     oui       cam    cam
+Fichier audio/vidéo       oui     oui     oui       oui    oui
+Lien YouTube/podcast      oui     oui     oui       oui    oui
+Offline (qualité max)     oui     oui     oui       oui    oui
+Temps réel (léger délai)  oui     oui     oui       oui    oui
+Export HTML interactif    oui     oui     oui       oui    oui
+Export PDF (WebView)      oui     oui     oui       oui    oui
+Export DOCX (docx-rs)     oui     oui     oui       oui    oui
+Export md2star (Pandoc)   oui     oui     oui       NON    NON
+Tier modèles              lourd   lourd   lourd     léger  léger
+Partage « 1 lien »        opt-in vers l'infra de l'utilisateur (jamais livré par défaut)
+Sync identité             opt-in explicite (pack chiffré déplacé par l'utilisateur)
+
+================================================================================
