@@ -1,0 +1,31 @@
+# Local-LLM synthesis adapter for nh-core.
+#
+# Translates notes_helper/synth.py: map-reduce over the transcript with a local LLM to
+# produce the structured Summary. The prompt-building, tolerant JSON parsing and schema
+# normalization are pure Rust (unit-tested via a mock LlmClient); the real Ollama HTTP
+# client sits behind the `ollama` feature so the default build stays light and green.
+[package]
+name = "nh-synth"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Local-LLM (map-reduce) synthesis adapter for nh-core, translated from notes_helper/synth.py."
+repository = "https://github.com/warith-harchaoui/notes-helper"
+publish = false
+
+[features]
+# Default is logic-only (mock-testable); no HTTP client is pulled in.
+default = []
+# Enable the real local Ollama client (blocking HTTP via ureq, localhost only).
+ollama = ["dep:ureq"]
+
+[dependencies]
+# Core traits and domain types this adapter produces.
+nh-core = { path = "../nh-core" }
+# Parse the local LLM's JSON output (tolerantly).
+serde_json = "1"
+# Structured logging.
+tracing = "0.1"
+# Real local Ollama transport; optional, blocking. localhost only → build without TLS,
+# keep the `json` feature for send_json/into_json.
+ureq = { version = "2", optional = true, default-features = false, features = ["json"] }
