@@ -95,6 +95,60 @@ impl<D: DiarizationEngine, A: AsrEngine> TranscriptionEngine for DiarizeThenAsr<
     }
 }
 
+/// A baseline [`DiarizationEngine`] that treats the whole buffer as a single speaker.
+///
+/// It provisions no model and always emits one turn `[0, duration]` labelled `"S0"`. It
+/// keeps the offline pipeline runnable end-to-end today (real ffmpeg + real ASR) and is
+/// the honest fallback when no diarization model is available; the real multi-speaker
+/// engine (sherpa-onnx, in `nh-sherpa`) replaces it without changing the pipeline.
+pub struct SingleSpeakerDiarizer {
+    /// The single label to attribute all speech to.
+    label: String,
+}
+
+impl SingleSpeakerDiarizer {
+    /// Build a single-speaker diarizer labelling everything `"S0"`.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            label: "S0".to_string(),
+        }
+    }
+
+    /// Build a single-speaker diarizer with an explicit label.
+    #[must_use]
+    pub fn with_label(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+        }
+    }
+}
+
+impl Default for SingleSpeakerDiarizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DiarizationEngine for SingleSpeakerDiarizer {
+    fn diarize(
+        &self,
+        audio: &crate::model::AudioBuffer,
+    ) -> Result<Vec<crate::model::DiarizedSegment>> {
+        // An empty buffer has no turns at all.
+        let duration = audio.duration_s();
+        if duration <= 0.0 {
+            return Ok(Vec::new());
+        }
+        // Otherwise, one turn spanning the whole recording for the single speaker.
+        Ok(vec![crate::model::DiarizedSegment {
+            t0: 0.0,
+            t1: duration,
+            speaker: SpeakerId::new(self.label.clone()),
+        }])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,5 +208,26 @@ mod tests {
         for speaker in &transcript.speakers {
             assert!((speaker.speaking_time_s - 1.0).abs() < 1e-9);
         }
+    }
+
+    #[test]
+    fn single_speaker_diarizer_covers_whole_buffer() {
+        // A 2 s buffer yields exactly one S0 turn spanning [0, 2]; empty yields none.
+        let audio = AudioBuffer::new(
+            PIPELINE_SAMPLE_RATE,
+            vec![0.0; 2 * PIPELINE_SAMPLE_RATE as usize],
+        );
+        let turns = SingleSpeakerDiarizer::new()
+            .diarize(&audio)
+            .expect("diarize");
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].speaker.as_str(), "S0");
+        assert!((turns[0].t1 - 2.0).abs() < 1e-9);
+
+        let empty = AudioBuffer::new(PIPELINE_SAMPLE_RATE, Vec::new());
+        assert!(SingleSpeakerDiarizer::new()
+            .diarize(&empty)
+            .expect("diarize empty")
+            .is_empty());
     }
 }
