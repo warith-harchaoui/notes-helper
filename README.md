@@ -50,16 +50,16 @@ What ships today:
 Notes Helper is not on PyPI yet — install from GitHub, pinned to the release tag:
 
 ```bash
-pip install "git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"
+pip install "git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"
 ```
 
 Optional extras (pick what you need):
 
 ```bash
-pip install "notes-helper[process] @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # vocal-helper: VAD/diarization/ASR
-pip install "notes-helper[capture] @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # capture-helper: mic/screen capture
-pip install "notes-helper[docs]    @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # md2star: DOCX/PDF/PPTX export
-pip install "notes-helper[all]     @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.4.1"   # everything
+pip install "notes-helper[process] @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"   # vocal-helper: VAD/diarization/ASR
+pip install "notes-helper[capture] @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"   # capture-helper: mic/screen capture
+pip install "notes-helper[docs]    @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"   # md2star: DOCX/PDF/PPTX export
+pip install "notes-helper[all]     @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"   # everything
 ```
 
 > **PyPI release coming soon.**
