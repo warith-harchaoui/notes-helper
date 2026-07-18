@@ -738,6 +738,13 @@ Project-specific rules that sit **on top of** Parts I–II.
 - **Cross-language naming consistency.** A single domain concept keeps the **same name**
   across Rust, Swift, Kotlin, and TypeScript (`Speaker`, `Utterance`, `Session`,
   `Report`, `Source`) so the code reads the same from one layer to the next.
+- **Python is the reference, Rust is production.** The `~/*-helper` Python libraries are
+  the proven prototype and spec for this project. Before writing a Rust module, **read the
+  corresponding Python implementation and translate its proven logic** rather than
+  reinventing it — port the behavior, adopt Rust idioms. Examples: `nh-io`'s ffmpeg decode
+  mirrors `audio_helper.load_audio` (pcm_f32le + resample + mono); the diarized pipeline
+  mirrors `vocal_helper`; the report/synthesis mirrors `notes_helper` (Python). When in
+  doubt about a parameter or an edge case, the Python `*-helper` is the source of truth.
 - **No-MVP reminder.** Ordering of work exists only to prove the chain early; it never
   reduces scope. Every deliverable aims for the complete feature.
 
