@@ -41,6 +41,7 @@ from collections.abc import Iterator
 
 import os_helper as osh
 
+from . import i18n as _i18n
 from .config import OLLAMA_MODEL, OLLAMA_URL
 
 
@@ -197,6 +198,24 @@ def _as_str(x: object) -> str:
         return ""
     if isinstance(x, str):
         return x.strip()
+    # LLM drift: a point/theme item sometimes comes back as an object like
+    # ``{"texte": "...", "timestamp": 307}`` instead of a plain string. Extract the
+    # human text and drop metadata (timestamps) so the report never shows raw JSON.
+    if isinstance(x, dict):
+        for key in ("texte", "text", "point", "phrase", "contenu", "titre", "resume"):
+            v = x.get(key)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        # No known key: take the first string value, else recurse into a nested list.
+        for v in x.values():
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        for v in x.values():
+            if isinstance(v, (list, tuple)):
+                nested = _as_str(v)
+                if nested:
+                    return nested
+        return ""
     if isinstance(x, (list, tuple)):
         return " ".join(_as_str(i) for i in x if i is not None).strip()
     return str(x).strip()
@@ -388,31 +407,10 @@ def _chunks(transcript: list[dict], names: dict, max_chars: int = 6000) -> Itera
 # transcript chunk in a local model's context window.
 _CONTEXT_MAX_CHARS: int = 8000
 
-# System prompt for the map step: extract faithful partial notes from one chunk.
-# Kept as a module constant (formatted with the target language at call time).
-_MAP_SYS: str = (
-    "Tu es un secrétaire de séance rigoureux. À partir d'un extrait de "
-    "transcription horodatée, extrais fidèlement, SANS inventer, en {lang}. "
-    'Renvoie un JSON: {{"points":[...], "decisions":[{{"decision":..,"contexte":..,"t":sec}}], '
-    '"actions":[{{"action":..,"responsable":..,"echeance":..}}], '
-    '"citations":[{{"speaker":..,"texte":..,"t":sec}}], "themes":[..]}}. '
-    "Les lignes sont préfixées par leur horodatage en secondes, ex. [1979s]; "
-    "recopie CET entier (en secondes) tel quel dans le champ t. "
-    "Chaque décision/citation garde le timestamp (secondes) d'où elle vient."
-)
-
-# System prompt for the reduce step: fold partial notes into the final report
-# with an exact, fixed set of keys.
-_REDUCE_SYS: str = (
-    "Tu es un rédacteur de compte-rendu. À partir de notes partielles, "
-    "produis le compte-rendu final en {lang}, JSON strict avec EXACTEMENT ces clés: "
-    '"resume" (liste de paragraphes), "points_cles" (liste), '
-    '"decisions" (liste {{decision, contexte}}), '
-    '"actions" (liste {{action, responsable, echeance}}), '
-    '"chapitres" (liste {{t, titre, resume}} — t en secondes), '
-    '"themes" (liste {{theme, points[]}}), '
-    '"citations" (liste {{speaker, texte, t}}). Fidèle aux notes, rien d\'inventé.'
-)
+# The map + reduce system prompts live, fully translated per language, in
+# locales/i18n.yaml under `prompts.map_sys` / `prompts.reduce_sys`. They are read
+# at call time via `_i18n.prompt(id, language)` so a report can be produced in any
+# supported language, and adding a language means only editing that catalog.
 
 
 def synthesize(
@@ -488,8 +486,10 @@ def synthesize(
         if ctx
         else ""
     )
-    map_sys = _MAP_SYS.format(lang=language) + ctx_block
-    reduce_sys = _REDUCE_SYS.format(lang=language) + ctx_block
+    # Prompts are fully translated per language in locales/i18n.yaml (the single
+    # source of truth): adding a language = adding its column there, nothing here.
+    map_sys = _i18n.prompt("map_sys", language) + ctx_block
+    reduce_sys = _i18n.prompt("reduce_sys", language) + ctx_block
     duree = _hhmmss(transcript[-1]["t1"]) if transcript else "0:00:00"
     meta = {
         "titre": title or "Compte-rendu",

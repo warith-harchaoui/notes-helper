@@ -32,14 +32,14 @@ import time
 import numpy as np
 import os_helper as osh
 
-from .config import DEFAULT_LANGUAGE, SR, WHISPER_MODEL
+from .config import ASR_LANGUAGE, SR, WHISPER_MODEL
 
 
 def transcribe(
     audio: np.ndarray,
     turns: list[dict],
     *,
-    language: str = DEFAULT_LANGUAGE,
+    language: str = ASR_LANGUAGE,
     model: str = WHISPER_MODEL,
     initial_prompt: str = "",
 ) -> list[dict]:
@@ -53,7 +53,9 @@ def transcribe(
         Speaker turns as ``{"t0": float, "t1": float, "spk": int}`` (from
         :func:`notes_helper.diarize.merge_turns`).
     language : str, optional
-        Language code passed to whisper.cpp. Defaults to :data:`DEFAULT_LANGUAGE`.
+        Spoken language passed to whisper.cpp. Defaults to :data:`ASR_LANGUAGE`
+        (``"auto"``) so the language is discovered with no a priori, whatever is
+        spoken. Pass an explicit code only to force a known language.
     model : str, optional
         whisper.cpp model name. Defaults to :data:`WHISPER_MODEL`.
     initial_prompt : str, optional

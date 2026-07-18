@@ -43,6 +43,8 @@ from typing import Any
 
 import os_helper as osh
 
+from . import i18n as _i18n
+
 # Path of the optional project-local override file. Kept relative (cwd-based) on
 # purpose: it is meant to travel with the working directory / project, not the
 # installed package, so different projects can carry different overrides.
@@ -139,8 +141,20 @@ SR: int = 16000  # working sample rate (mono float32)
 # NOTE: legacy env var name preserved via _resolve("WHISPER_MODEL") ==
 # NOTES_HELPER_WHISPER_MODEL, so existing overrides keep working.
 WHISPER_MODEL: str = _resolve("WHISPER_MODEL", "large-v3-turbo-q5_0")
-# Historically driven by NOTES_HELPER_LANG; keep that exact env var name.
-DEFAULT_LANGUAGE: str = _resolve("LANG", "fr")
+# Spoken-language of the audio: DISCOVERED, never assumed. Default ``"auto"`` lets
+# whisper detect the language with no a priori, whatever is spoken — the same for
+# a file or a live stream. Override with NOTES_HELPER_ASR_LANG only to force a
+# known language (rarely wanted). This is deliberately decoupled from the OUTPUT
+# language below: you may transcribe English speech and still write a French brief.
+ASR_LANGUAGE: str = _resolve("ASR_LANG", "auto")
+
+# --- output / interface language (i18n) ------------------------------------ #
+# The language notes-helper WRITES back in (report, LLM prompts). The set of
+# supported output languages is the single source of truth in
+# ``locales/i18n.yaml`` — adding a language = adding its column there. French and
+# English are the guaranteed minimum. NOTES_HELPER_LANG overrides the default.
+SUPPORTED_LANGUAGES: tuple[str, ...] = _i18n.supported_languages()
+DEFAULT_LANGUAGE: str = _resolve("LANG", _i18n.default_language())
 
 # --- diarization ----------------------------------------------------------- #
 # Number of speakers: None => estimate; an int forces exactly N (as in the
@@ -149,6 +163,15 @@ DEFAULT_LANGUAGE: str = _resolve("LANG", "fr")
 DEFAULT_N_SPK: int | None = None
 MERGE_GAP_S: float = 0.8  # merge same-speaker gaps below this
 MAX_TURN_S: float = 28.0  # cap a merged turn before forcing a cut
+# Speaker-embedding backend for diarization. ``"nemo"`` (default) uses the
+# torch/NeMo TitaNet-large — the sharpest embedder, ideal on desktop. ``"sherpa"``
+# runs the *same* TitaNet-large through onnxruntime (no torch), the portable path
+# the cross-platform app ships (study-selected, ADR 0002 in notes-helper): DER
+# 0.174 on AMI ES2011a, 0.148 on held-out IS1008a, FR+EN validated. Both emit the
+# same 192-dim vector, so identity matching is unaffected. The sherpa path needs
+# ``pip install vocal-helper[sherpa]`` and a TitaNet-large ONNX via
+# ``$VH_SHERPA_EMBEDDING`` or the diarization-engines bundle.
+DIAR_EMBEDDER: str = _resolve("DIAR_EMBEDDER", "nemo")
 
 # --- local LLM synthesis (Ollama on localhost) ----------------------------- #
 # Localhost by default: the "remote" endpoint is only remote if an operator

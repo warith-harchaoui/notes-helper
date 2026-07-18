@@ -37,11 +37,12 @@ Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import numpy as np
 import os_helper as osh
 
-from .config import MAX_TURN_S, MERGE_GAP_S, SR
+from .config import DIAR_EMBEDDER, MAX_TURN_S, MERGE_GAP_S, SR
 
 # TitaNet emits a fixed-width speaker embedding; kept as a module constant so
 # the pre-allocated matrix in embed_segments() and any downstream consumer agree
@@ -170,6 +171,43 @@ def run_vad(audio: np.ndarray) -> list[tuple[float, float]]:
     return asyncio.run(_run_vad(audio))
 
 
+def _make_embedder() -> Any:
+    """Build the speaker embedder selected by :data:`config.DIAR_EMBEDDER`.
+
+    Both backends emit the **same 192-dim TitaNet-large vector**, so downstream
+    clustering and cross-recording identity matching are unaffected by the choice.
+
+    - ``"nemo"`` (default): torch/NeMo ``_TitaNetEmbedder`` — sharpest on desktop.
+    - ``"sherpa"``: torch-free ONNX ``_SherpaEmbedder`` running the same TitaNet-large
+      through onnxruntime — the portable path the cross-platform app ships (ADR 0002).
+      Its ONNX model is resolved via vocal-helper's ``_resolve_sherpa_models`` (env
+      ``$VH_SHERPA_EMBEDDING`` or the diarization-engines bundle).
+
+    Returns
+    -------
+    Any
+        An embedder exposing ``load()`` and ``embed(pcm, sr) -> np.ndarray``.
+
+    Raises
+    ------
+    ValueError
+        If :data:`config.DIAR_EMBEDDER` is neither ``"nemo"`` nor ``"sherpa"``.
+    """
+    if DIAR_EMBEDDER == "nemo":
+        from vocal_helper.diar import _TitaNetEmbedder
+
+        return _TitaNetEmbedder()
+    if DIAR_EMBEDDER == "sherpa":
+        from vocal_helper.diar import _resolve_sherpa_models, _SherpaEmbedder
+
+        _seg, emb_model = _resolve_sherpa_models()
+        return _SherpaEmbedder(model_path=emb_model)
+    raise ValueError(
+        f"unknown DIAR_EMBEDDER {DIAR_EMBEDDER!r}; expected 'nemo' or 'sherpa' "
+        "(set NOTES_HELPER_DIAR_EMBEDDER)."
+    )
+
+
 def embed_segments(
     audio: np.ndarray, segs: list[tuple[float, float]]
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -203,9 +241,7 @@ def embed_segments(
     segment embedding failures are logged and left as ``ok=False`` rather than
     aborting the whole recording.
     """
-    from vocal_helper.diar import _TitaNetEmbedder
-
-    emb = _TitaNetEmbedder()
+    emb = _make_embedder()
     emb.load()
     X = np.zeros((len(segs), TITANET_DIM), dtype=np.float32)
     ok = np.zeros(len(segs), dtype=bool)

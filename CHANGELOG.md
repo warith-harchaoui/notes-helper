@@ -6,6 +6,27 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+### Added
+- **Audio language discovered with no a priori.** Transcription now defaults to
+  `"auto"` everywhere (`config.ASR_LANGUAGE`, `asr.transcribe`, `pipeline.run`), so
+  whisper detects whatever is spoken — file or stream — instead of assuming French.
+  Decoupled from the output language: you can transcribe English speech and still
+  write a French brief.
+- **One i18n catalog as the source of truth for output languages.** New
+  `locales/i18n.yaml` (`meta.languages` + fully-translated `prompts:`) and the tiny
+  `notes_helper.i18n` loader (`supported_languages`, `language_name`, `prompt`,
+  `default_language`). French + English are the guaranteed minimum; **adding a
+  language is just adding its column** to the catalog — no code change. The synthesis
+  map/reduce prompts moved out of `synth.py` into the catalog, translated per
+  language. New `config.SUPPORTED_LANGUAGES`. Covered by `tests/test_i18n.py`.
+- **Selectable diarization embedder (`DIAR_EMBEDDER`).** New config knob
+  (`NOTES_HELPER_DIAR_EMBEDDER`, default `"nemo"`) chooses the speaker-embedding
+  backend: `"nemo"` keeps the torch/NeMo TitaNet-large (desktop), `"sherpa"` runs the
+  same TitaNet-large through onnxruntime — the torch-free, portable path the
+  cross-platform app ships (ADR 0002: DER 0.174 on AMI ES2011a, 0.148 on held-out
+  IS1008a, FR+EN validated). Both emit the same 192-dim vector, so cross-recording
+  identity matching is unchanged. The sherpa path needs `vocal-helper[sherpa]`.
+
 ## [0.4.1] - 2026-07-15
 
 ### Documentation

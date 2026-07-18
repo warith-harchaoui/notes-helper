@@ -84,7 +84,7 @@ def run(
     out_dir: str,
     *,
     n_spk: int | None = None,
-    language: str = "fr",
+    language: str = "auto",
     initial_prompt: str = "",
     identify: bool = True,
     db_path: str = DB_PATH,
@@ -101,7 +101,8 @@ def run(
     n_spk : int, optional
         Known speaker count passed to diarization; ``None`` estimates it.
     language : str, optional
-        ASR language code (default ``"fr"``).
+        Spoken language of the audio (default ``"auto"`` — discovered with no a
+        priori, whatever is spoken). Pass a code only to force a known language.
     initial_prompt : str, optional
         Optional ASR priming prompt (e.g. domain vocabulary).
     identify : bool, optional

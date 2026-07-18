@@ -1,0 +1,70 @@
+# notes-helper — internationalisation catalog (single source of truth for language).
+# =============================================================================
+# This file governs the languages notes-helper can PRODUCE output in (reports,
+# LLM prompts, GUI labels). It follows the front-ui convention: one catalog with
+# `gui:` and `prompts:` namespaces, each entry mapping an id to per-language text.
+#
+# THE RULE (kept deliberately simple):
+#   * The keys under `meta.languages` ARE the set of supported output languages.
+#   * Français (`fr`) and English (`en`) are the guaranteed minimum — never remove
+#     them.
+#   * Adding a language = add its column here (e.g. a `de:` line under every
+#     entry, plus `de: Deutsch` under `meta.languages`). Nothing else to touch.
+#
+# IMPORTANT — this catalog does NOT constrain the spoken language of the audio.
+# Input audio (file OR live stream) is always language-detected with no a priori,
+# whatever is spoken. This catalog is only about the language we WRITE back in.
+# =============================================================================
+
+meta:
+  # The supported output languages, ISO-639-1 → human-readable name. The set of
+  # keys here is what `notes_helper.i18n.supported_languages()` returns.
+  languages:
+    fr: Français
+    en: English
+  # The default output language when the caller does not specify one. Must be a
+  # key of `languages` above.
+  default: fr
+
+prompts:
+  # Map step: extract faithful partial notes from one transcript chunk. Each
+  # language holds the FULLY-translated system prompt (no code interpolation).
+  map_sys:
+    fr: >-
+      Tu es un secrétaire de séance rigoureux. À partir d'un extrait de
+      transcription horodatée, extrais fidèlement, SANS inventer, en français.
+      Renvoie un JSON: {"points":[...], "decisions":[{"decision":..,"contexte":..,"t":sec}],
+      "actions":[{"action":..,"responsable":..,"echeance":..}],
+      "citations":[{"speaker":..,"texte":..,"t":sec}], "themes":[..]}.
+      Les lignes sont préfixées par leur horodatage en secondes, ex. [1979s];
+      recopie CET entier (en secondes) tel quel dans le champ t.
+      Chaque décision/citation garde le timestamp (secondes) d'où elle vient.
+    en: >-
+      You are a meticulous minute-taker. From a timestamped transcript excerpt,
+      extract faithfully, WITHOUT inventing anything, in English.
+      Return JSON: {"points":[...], "decisions":[{"decision":..,"contexte":..,"t":sec}],
+      "actions":[{"action":..,"responsable":..,"echeance":..}],
+      "citations":[{"speaker":..,"texte":..,"t":sec}], "themes":[..]}.
+      Lines are prefixed with their timestamp in seconds, e.g. [1979s];
+      copy THAT integer (in seconds) verbatim into the t field.
+      Every decision/quote keeps the timestamp (seconds) it came from.
+  # Reduce step: fold partial notes into the final report with a fixed key set.
+  reduce_sys:
+    fr: >-
+      Tu es un rédacteur de compte-rendu. À partir de notes partielles,
+      produis le compte-rendu final en français, JSON strict avec EXACTEMENT ces clés:
+      "resume" (liste de paragraphes), "points_cles" (liste),
+      "decisions" (liste {decision, contexte}),
+      "actions" (liste {action, responsable, echeance}),
+      "chapitres" (liste {t, titre, resume} — t en secondes),
+      "themes" (liste {theme, points[]}),
+      "citations" (liste {speaker, texte, t}). Fidèle aux notes, rien d'inventé.
+    en: >-
+      You are a report writer. From partial notes, produce the final report
+      in English, strict JSON with EXACTLY these keys:
+      "resume" (list of paragraphs), "points_cles" (list),
+      "decisions" (list {decision, contexte}),
+      "actions" (list {action, responsable, echeance}),
+      "chapitres" (list {t, titre, resume} — t in seconds),
+      "themes" (list {theme, points[]}),
+      "citations" (list {speaker, texte, t}). Faithful to the notes, nothing invented.
