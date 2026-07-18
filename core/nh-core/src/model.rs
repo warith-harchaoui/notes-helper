@@ -170,6 +170,30 @@ impl AudioBuffer {
     pub fn is_empty(&self) -> bool {
         self.samples.is_empty()
     }
+
+    /// Extract the sub-buffer spanning `[t0_s, t1_s)` seconds (clamped to the buffer).
+    ///
+    /// Used by the diarize-then-ASR pipeline to hand each speaker turn to the ASR engine.
+    /// Out-of-range or inverted bounds yield an empty buffer rather than panicking.
+    ///
+    /// # Examples
+    /// ```
+    /// use nh_core::model::AudioBuffer;
+    /// let buf = AudioBuffer::new(16_000, (0..16_000).map(|i| i as f32).collect());
+    /// let mid = buf.slice(0.25, 0.75);
+    /// assert_eq!(mid.samples.len(), 8_000);
+    /// ```
+    #[must_use]
+    pub fn slice(&self, t0_s: f64, t1_s: f64) -> AudioBuffer {
+        // Convert the second bounds to sample indices, clamping into the valid range.
+        let rate = f64::from(self.sample_rate);
+        let start = (t0_s.max(0.0) * rate) as usize;
+        let start = start.min(self.samples.len());
+        let end = (t1_s.max(0.0) * rate) as usize;
+        // Never let `end` fall below `start` (inverted spans) or past the buffer.
+        let end = end.clamp(start, self.samples.len());
+        AudioBuffer::new(self.sample_rate, self.samples[start..end].to_vec())
+    }
 }
 
 /// A single live PCM frame (used by the online/streaming path, M4).
@@ -210,6 +234,20 @@ pub struct Utterance {
     pub words: Vec<Word>,
     /// Detected language (ISO-639-1) when known.
     pub language: Option<String>,
+}
+
+/// A diarized speaker turn: a time span attributed to one speaker, before ASR.
+///
+/// The diarization engine emits these; the diarize-then-ASR pipeline transcribes the
+/// audio under each one to produce the final [`Utterance`]s.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DiarizedSegment {
+    /// Start time in seconds since session start.
+    pub t0: f64,
+    /// End time in seconds since session start.
+    pub t1: f64,
+    /// The speaker this turn is attributed to.
+    pub speaker: SpeakerId,
 }
 
 /// A diarized speaker within a session, optionally linked to an enrolled [`Person`].

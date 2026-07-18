@@ -8,7 +8,9 @@
 //! never editing the core (ports-and-adapters; see `ARCHITECTURE.md`).
 
 use crate::error::Result;
-use crate::model::{AudioBuffer, MeetingContext, Report, Summary, Transcript, Utterance};
+use crate::model::{
+    AudioBuffer, DiarizedSegment, MeetingContext, Report, Summary, Transcript, Utterance,
+};
 
 /// Loads audio from a single, already-resolved offline source into a canonical
 /// [`AudioBuffer`].
@@ -48,6 +50,19 @@ pub trait AsrEngine {
     /// # Errors
     /// Returns [`crate::error::CoreError::Transcription`] on engine failure.
     fn transcribe(&self, audio: &AudioBuffer) -> Result<Vec<Utterance>>;
+}
+
+/// Segments a buffer into speaker turns (who-spoke-when), WITHOUT transcribing.
+///
+/// sherpa-onnx (VAD + segmentation + speaker embeddings) lives behind this port. Its
+/// output feeds the diarize-then-ASR pipeline, which runs ASR under each turn — the
+/// offline strategy translated from `vocal_helper`.
+pub trait DiarizationEngine {
+    /// Diarize the whole buffer into time-ordered speaker turns.
+    ///
+    /// # Errors
+    /// Returns [`crate::error::CoreError::Transcription`] on engine failure.
+    fn diarize(&self, audio: &AudioBuffer) -> Result<Vec<DiarizedSegment>>;
 }
 
 /// Produces the local-LLM [`Summary`] (llama.cpp behind this port).

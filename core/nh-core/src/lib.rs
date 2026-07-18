@@ -24,6 +24,7 @@
 pub mod error;
 pub mod model;
 pub mod models;
+pub mod pipeline;
 pub mod ports;
 pub mod session;
 
