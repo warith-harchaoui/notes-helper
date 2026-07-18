@@ -137,7 +137,7 @@ Côté **Python** (l'éval reste en Python), gatée en CI, seuils versionnés :
 | **ASR** | WER | vs corpus golden |
 | **Diarisation** | DER | vs corpus golden |
 
-Datasets golden dans `contracts/` ; harnais dans `contracts/evaluations/` (opt-in, coûts maîtrisés par cache).
+Datasets golden dans `contracts/` ; scripts d'évaluation dans `contracts/evaluations/` (opt-in, coûts maîtrisés par cache).
 
 ## 14. Parité Python→Rust  *(doctrine §3 / phase 3)*
 
