@@ -36,3 +36,20 @@ jobs:
       # Run unit tests, doctests, and the integration wiring test.
       - name: Tests
         run: cargo test --all
+
+  # Separate, heavier job: compile the real whisper.cpp binding so FFI regressions are
+  # caught in CI. Build-only (the transcription test is #[ignore] and needs a model).
+  whisper-feature:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # whisper-rs-sys builds whisper.cpp via cmake; ensure the toolchain is present.
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake clang
+      # Compile the ASR adapter with the native backend enabled.
+      - name: Build nh-whisper (whisper-cpp feature)
+        run: cargo build -p nh-whisper --features whisper-cpp

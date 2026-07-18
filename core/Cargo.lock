@@ -276,6 +276,7 @@ name = "nh-whisper"
 version = "0.1.0"
 dependencies = [
  "nh-core",
+ "nh-io",
  "tracing",
  "whisper-rs",
 ]

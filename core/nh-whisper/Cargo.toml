@@ -26,3 +26,7 @@ nh-core = { path = "../nh-core" }
 tracing = "0.1"
 # Real ASR backend; optional so it only builds under the `whisper-cpp` feature.
 whisper-rs = { version = "0.14", optional = true }
+
+[dev-dependencies]
+# Used by the (ignored) real-transcription test to load a WAV through the port.
+nh-io = { path = "../nh-io" }
