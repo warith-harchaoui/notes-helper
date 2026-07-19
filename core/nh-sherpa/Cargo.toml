@@ -1,0 +1,38 @@
+# sherpa-onnx speaker-diarization adapter for nh-core.
+#
+# The real FFI (via `sherpa-rs`, which builds sherpa-onnx) is HEAVY, so it sits behind the
+# `sherpa-onnx` feature. The default build compiles a thin stub that returns a clear error
+# — this keeps `cargo test --all` and the core CI fast and green, while the real engine is
+# opt-in (`--features sherpa-onnx`) and validated in a dedicated build. Same shape as
+# `nh-whisper`.
+#
+# The engine is the portable, torch-free ONNX pipeline selected by the diarization study
+# (ADR 0002): pyannote community-1 segmentation ONNX + NeMo TitaNet-large embedding ONNX +
+# fast clustering. DER 0.174 on AMI ES2011a, 0.148 on held-out IS1008a, FR+EN validated.
+[package]
+name = "nh-sherpa"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "sherpa-onnx speaker-diarization adapter for nh-core (behind the `sherpa-onnx` feature)."
+repository = "https://github.com/warith-harchaoui/notes-helper"
+publish = false
+
+[features]
+# Default is stub-only so no native build happens unless explicitly requested.
+default = []
+# Enable the real sherpa-onnx binding (pulls and builds sherpa-rs / sherpa-onnx).
+sherpa-onnx = ["dep:sherpa-rs"]
+
+[dependencies]
+# Core traits and domain types this adapter implements.
+nh-core = { path = "../nh-core" }
+# Structured logging.
+tracing = "0.1"
+# Real diarization backend; optional so it only builds under the `sherpa-onnx` feature.
+# sherpa-rs encapsulates the unsafe sherpa-onnx FFI internally, so our adapter stays safe.
+sherpa-rs = { version = "0.6", optional = true }
+
+[dev-dependencies]
+# Used by the (ignored) real-diarization test to load a WAV through the port.
+nh-io = { path = "../nh-io" }

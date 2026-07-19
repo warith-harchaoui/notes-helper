@@ -57,8 +57,13 @@ product requirement).
 
 ## Consequences
 
-- Rust **`nh-sherpa`** implements the `DiarizationEngine` port over sherpa-onnx (no
-  ready `sherpa-rs` crate → C FFI/bindgen, feature-gated like `nh-whisper`).
+- Rust **`nh-sherpa`** implements the `DiarizationEngine` port over sherpa-onnx via the
+  **`sherpa-rs` crate** (0.6.8, `sherpa_rs::diarize::Diarize`), feature-gated like
+  `nh-whisper`: default build is a stub, the real binding is opt-in
+  (`--features sherpa-onnx`). `sherpa-rs` encapsulates the sherpa-onnx FFI, so the adapter
+  keeps `#![forbid(unsafe_code)]`. (Earlier plan assumed hand-written C FFI/bindgen; the
+  maintained crate makes that unnecessary.) **Done 2026-07-19** — compiles green in both
+  modes; `SherpaDiarizer::new(seg_onnx, emb_onnx)` + threshold / num_clusters knobs.
 - Models are app assets, hash-verified, served from the maintainer's FTP via the
   ModelManager (Q11); documented in `models/sherpa/README.md`.
 - `vocal-helper` gains an optional torch-free `sherpa` backend; its existing
