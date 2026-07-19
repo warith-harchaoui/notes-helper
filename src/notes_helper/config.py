@@ -43,8 +43,6 @@ from typing import Any
 
 import os_helper as osh
 
-from . import i18n as _i18n
-
 # Path of the optional project-local override file. Kept relative (cwd-based) on
 # purpose: it is meant to travel with the working directory / project, not the
 # installed package, so different projects can carry different overrides.
@@ -141,20 +139,13 @@ SR: int = 16000  # working sample rate (mono float32)
 # NOTE: legacy env var name preserved via _resolve("WHISPER_MODEL") ==
 # NOTES_HELPER_WHISPER_MODEL, so existing overrides keep working.
 WHISPER_MODEL: str = _resolve("WHISPER_MODEL", "large-v3-turbo-q5_0")
-# Spoken-language of the audio: DISCOVERED, never assumed. Default ``"auto"`` lets
-# whisper detect the language with no a priori, whatever is spoken — the same for
-# a file or a live stream. Override with NOTES_HELPER_ASR_LANG only to force a
-# known language (rarely wanted). This is deliberately decoupled from the OUTPUT
-# language below: you may transcribe English speech and still write a French brief.
+# Language of the audio: DISCOVERED, never assumed. Default ``"auto"`` lets whisper
+# detect the language with no a priori, whatever is spoken — the same for a file or
+# a live stream. There is deliberately NO default language and no fixed language
+# set anywhere in notes-helper: the report is written in the language discovered
+# from the content (or an explicit one the caller passes). Override with
+# NOTES_HELPER_ASR_LANG only to force a known spoken language (rarely wanted).
 ASR_LANGUAGE: str = _resolve("ASR_LANG", "auto")
-
-# --- output / interface language (i18n) ------------------------------------ #
-# The language notes-helper WRITES back in (report, LLM prompts). The set of
-# supported output languages is the single source of truth in
-# ``locales/i18n.yaml`` — adding a language = adding its column there. French and
-# English are the guaranteed minimum. NOTES_HELPER_LANG overrides the default.
-SUPPORTED_LANGUAGES: tuple[str, ...] = _i18n.supported_languages()
-DEFAULT_LANGUAGE: str = _resolve("LANG", _i18n.default_language())
 
 # --- diarization ----------------------------------------------------------- #
 # Number of speakers: None => estimate; an int forces exactly N (as in the

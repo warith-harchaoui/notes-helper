@@ -421,7 +421,7 @@ def synthesize(
     date: str = "",
     lieu: str = "",
     model: str = OLLAMA_MODEL,
-    language: str = "fr",
+    language: str | None = None,
     audio_sources: list | None = None,
     context: str = "",
 ) -> dict:
@@ -443,7 +443,9 @@ def synthesize(
     model : str, optional
         Ollama model name. Defaults to :data:`OLLAMA_MODEL`.
     language : str, optional
-        Output language code (default ``"fr"``).
+        Output language for the report. ``None`` (default) means **discover** —
+        the model is told to write in the transcript's own language, so nothing is
+        assumed. Pass an explicit code (e.g. ``"fr"``, ``"en"``) only to force one.
     audio_sources : list, optional
         Source descriptors recorded in the report metadata.
     context : str, optional
@@ -486,10 +488,12 @@ def synthesize(
         if ctx
         else ""
     )
-    # Prompts are fully translated per language in locales/i18n.yaml (the single
-    # source of truth): adding a language = adding its column there, nothing here.
-    map_sys = _i18n.prompt("map_sys", language) + ctx_block
-    reduce_sys = _i18n.prompt("reduce_sys", language) + ctx_block
+    # Prompts live in locales/i18n.yaml (front-ui i18n convention). No default
+    # language: when the caller passes none, the model is told to write in the
+    # transcript's own language — the report language is discovered, never assumed.
+    lang_clause = f"en {language}" if language else "dans la langue d'origine de la transcription"
+    map_sys = _i18n.prompt("map_sys").replace("{lang_clause}", lang_clause) + ctx_block
+    reduce_sys = _i18n.prompt("reduce_sys").replace("{lang_clause}", lang_clause) + ctx_block
     duree = _hhmmss(transcript[-1]["t1"]) if transcript else "0:00:00"
     meta = {
         "titre": title or "Compte-rendu",

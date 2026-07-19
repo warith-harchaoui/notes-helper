@@ -337,7 +337,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         p.add_argument(
             "--model", default=os.environ.get("NOTES_HELPER_OLLAMA_MODEL", "qwen2.5:32b")
         )
-        p.add_argument("--lang", default="fr")
+        # No default language: None means the report language is discovered from
+        # the transcript. Pass an explicit code only to force one.
+        p.add_argument("--lang", default=None)
         p.add_argument("--format", default="html")
         p.add_argument("--vault", default="")
         # Meeting context for synth: inline text or a file (file wins). Used to
@@ -349,7 +351,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     p.add_argument("audio")
     p.add_argument("--out", required=True)
     p.add_argument("--speakers", type=int, default=None)
-    p.add_argument("--lang", default="fr")
+    # Spoken language is auto-detected by default (no a priori); pass a code to force it.
+    p.add_argument("--lang", default="auto")
     p.add_argument("--prompt", default="")
     p.add_argument("--no-identify", action="store_true")
     p.set_defaults(func=_cmd_run)

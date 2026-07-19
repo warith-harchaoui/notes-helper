@@ -73,7 +73,7 @@ except ImportError as exc:  # pragma: no cover
 
 # The pipeline imports below are light (no torch / whisper / Ollama pulled at
 # import time); the heavy work happens lazily inside the called functions.
-from .config import DEFAULT_LANGUAGE, OLLAMA_MODEL
+from .config import OLLAMA_MODEL
 from .outputs import render
 from .synth import normalize_synthese, synthesize
 
@@ -113,7 +113,10 @@ class SynthRequest(BaseModel):
     )
     title: str = Field(default="", description="Meeting title.")
     lieu: str = Field(default="", description="Meeting place.")
-    language: str = Field(default=DEFAULT_LANGUAGE, description="Synthesis language code.")
+    language: str | None = Field(
+        default=None,
+        description="Report language; None (default) discovers it from the transcript.",
+    )
     model: str = Field(default=OLLAMA_MODEL, description="Local Ollama model name.")
 
 
