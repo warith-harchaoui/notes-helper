@@ -60,11 +60,13 @@ des **adaptateurs**.
 - **Fait quand :** `cargo test` vert, clippy clean, doctests OK, un `Session` factice
   produit un `Report` vide via des ports mock.
 
-### M1 — Moteurs + pipeline offline — *la chaîne réelle*
+### M1 — Moteurs + pipeline offline — *la chaîne réelle*  *(en cours)*
 - **Objectif :** wav réel → transcript diarisé → `Report`, 100 % local.
 - **Périmètre code :**
-  - Bindings : **whisper.cpp** (`asr`), **sherpa-onnx** (`diar` : VAD + diarisation +
-    embeddings), **llama.cpp** (`synth`) — crates FFI, features de build gérées (cmake).
+  - Bindings : **whisper.cpp** (`asr`, crate `nh-whisper`), **sherpa-onnx**
+    (`diar` : segmentation + embeddings, crate **`nh-sherpa`** ✅ 2026-07-19 via
+    `sherpa-rs` 0.6.8 — stub par défaut / réel sous `--features sherpa-onnx`,
+    `#![forbid(unsafe_code)]`), **llama.cpp** (`synth`) — features de build gérées (cmake).
   - `pipeline::offline` : whole-buffer diar (qualité max) → ASR batchée → `synth`
     (résumé/thèmes/décisions/actions/chapitres/citations) → `Report`.
   - `models::ModelManager` : fetch depuis le **FTP de Warith**, **hash-check**, cache
