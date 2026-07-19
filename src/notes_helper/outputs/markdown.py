@@ -34,6 +34,7 @@ Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 
 from __future__ import annotations
 
+from ._text import as_text
 from ._timefmt import seconds as _seconds
 
 
@@ -122,38 +123,48 @@ def render_markdown(transcript: list[dict], syn: dict, *, include_transcript: bo
 
     # Each of the following sections is emitted only when its key is present, so
     # an empty synthesis yields just the header block above.
+    # Every user-facing value goes through as_text so a drifted dict/list from the
+    # LLM (e.g. {"texte": "…"}) renders as its text, never as raw JSON on the page.
     if syn.get("resume"):
         L.append("\n## Résumé\n")
-        L += [p for p in syn["resume"]]
+        L += [as_text(p) for p in syn["resume"]]
     if syn.get("points_cles"):
         L.append("\n## Points clés\n")
-        L += [f"- {x}" for x in syn["points_cles"]]
+        L += [f"- {as_text(x)}" for x in syn["points_cles"]]
     if syn.get("decisions"):
         L.append("\n## Décisions\n")
         for d in syn["decisions"]:
             L.append(
-                f"- ✓ **{d['decision']}**" + (f" — {d['contexte']}" if d.get("contexte") else "")
+                f"- ✓ **{as_text(d.get('decision', d))}**"
+                + (
+                    f" — {as_text(d['contexte'])}"
+                    if isinstance(d, dict) and d.get("contexte")
+                    else ""
+                )
             )
     if syn.get("actions"):
-        # Actions render as a three-column Markdown table with dash placeholders
-        # for any missing responsable / échéance.
+        # Actions render as a two-column Markdown table (action + who), dash for a
+        # missing responsable. No due-date column — deadlines are not tracked here.
         L.append("\n## Actions\n")
-        L.append("| Action | Responsable | Échéance |")
-        L.append("|---|---|---|")
+        L.append("| Action | Responsable |")
+        L.append("|---|---|")
         for a in syn["actions"]:
-            L.append(f"| {a['action']} | {a.get('responsable', '—')} | {a.get('echeance', '—')} |")
+            who = as_text(a.get("responsable", "—")) if isinstance(a, dict) else "—"
+            L.append(
+                f"| {as_text(a.get('action', a) if isinstance(a, dict) else a)} | {who or '—'} |"
+            )
     if syn.get("chapitres"):
         L.append("\n## Chapitres\n")
         for c in syn["chapitres"]:
             L.append(
-                f"- `{_hhmmss(c['t'])}` **{c['titre']}**"
-                + (f" — {c['resume']}" if c.get("resume") else "")
+                f"- `{_hhmmss(c['t'])}` **{as_text(c['titre'])}**"
+                + (f" — {as_text(c['resume'])}" if c.get("resume") else "")
             )
     if syn.get("themes"):
         L.append("\n## Thèmes\n")
         for t in syn["themes"]:
-            L.append(f"\n### {t['theme']}\n")
-            L += [f"- {p}" for p in t.get("points", [])]
+            L.append(f"\n### {as_text(t['theme'])}\n")
+            L += [f"- {as_text(p)}" for p in t.get("points", [])]
     if syn.get("citations"):
         L.append("\n## Citations\n")
         for q in syn["citations"]:
@@ -161,7 +172,7 @@ def render_markdown(transcript: list[dict], syn: dict, *, include_transcript: bo
             # only when the quote carries one.
             who = names.get(q.get("speaker", ""), q.get("speaker", ""))
             ts = f" · {_hhmmss(q['t'])}" if q.get("t") is not None else ""
-            L.append(f"> « {q['texte']} »\n> — {who}{ts}\n")
+            L.append(f"> « {as_text(q['texte'])} »\n> — {who}{ts}\n")
     if include_transcript and transcript:
         L.append("\n## Transcript\n")
         for u in transcript:

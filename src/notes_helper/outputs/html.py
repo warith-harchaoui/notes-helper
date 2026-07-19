@@ -38,6 +38,7 @@ import os
 import shutil
 
 from ..config import SPK_COLORS
+from ._text import as_text
 from ._timefmt import seconds as _seconds
 
 # Directory holding the vendored offline assets (Tailwind + fonts), resolved
@@ -96,12 +97,11 @@ def esc(t: object) -> str:
     >>> esc(['x', 'y'])
     'x y'
     """
-    if t is None:
-        return ""
     if not isinstance(t, str):
-        # Defensive: renderers normalise the synthesis upstream, but esc is also
-        # called on ad-hoc values — coerce lists/numbers rather than crash.
-        t = " ".join(str(i) for i in t) if isinstance(t, (list, tuple)) else str(t)
+        # A local LLM may hand a field back as a dict/list/number instead of a
+        # string. as_text pulls the human text out (e.g. {"texte": "…"} -> "…") so
+        # the page never leaks raw JSON like {'texte': …}. None -> "".
+        t = as_text(t)
     return html.escape(t)
 
 
@@ -189,19 +189,19 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
         for d in syn.get("decisions", [])
     )
 
-    # Actions render as table rows; responsable/échéance fall back to a dash.
+    # Actions render as a two-column table (action + who); the missing responsable
+    # falls back to a dash. No due-date column — deadlines are not tracked here.
     act_rows = "".join(
         f'<tr class="border-b border-slate-100 dark:border-slate-800">'
         f'<td class="py-3 pr-4 align-top">{esc(a["action"])}</td>'
-        f'<td class="py-3 pr-4 align-top whitespace-nowrap"><span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-sm">{esc(a.get("responsable", "—"))}</span></td>'
-        f'<td class="py-3 align-top whitespace-nowrap text-sm text-slate-500">{esc(a.get("echeance", "—"))}</td></tr>'
+        f'<td class="py-3 align-top whitespace-nowrap"><span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-sm">{esc(a.get("responsable", "—"))}</span></td></tr>'
         for a in syn.get("actions", [])
     )
     actions_html = (
         '<div class="overflow-x-auto"><table class="w-full text-left"><thead>'
         '<tr class="border-b-2 border-slate-200 dark:border-slate-700 text-sm uppercase tracking-wide text-slate-500">'
-        '<th class="py-2 pr-4 font-semibold">Action</th><th class="py-2 pr-4 font-semibold">Responsable</th>'
-        '<th class="py-2 font-semibold">Échéance</th></tr></thead>'
+        '<th class="py-2 pr-4 font-semibold">Action</th><th class="py-2 font-semibold">Responsable</th>'
+        "</tr></thead>"
         f"<tbody>{act_rows}</tbody></table></div>"
     )
 
@@ -241,7 +241,7 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
     for u in transcript:
         sid = u["speaker"]
         tr_rows.append(
-            f'<div class="utt flex gap-3 py-2" data-spk="{sid}" data-text="{esc(u["text"]).lower()}">'
+            f'<div class="utt flex gap-3 py-2 -mx-2 px-2 rounded-lg scroll-mt-24 transition-colors" data-spk="{sid}" data-t="{u["t0"]}" data-text="{esc(u["text"]).lower()}">'
             f'<button class="ts shrink-0 font-mono text-xs text-slate-400 hover:text-emerald-600" data-t="{u["t0"]}">{_hhmmss(u["t0"])}</button>'
             f'<div><span class="mr-2 font-semibold" style="color:{color_of.get(sid, "#555")}">{esc(spk_name(sid))}</span>'
             f"<span>{esc(u['text'])}</span></div></div>"
@@ -348,8 +348,26 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
 <main class="mx-auto max-w-4xl px-6 py-8">{panels_html}</main>
 <script>
 const player=document.getElementById('player');
-function seek(t){{if(!player)return;player.currentTime=t;player.play();window.scrollTo({{top:0,behavior:'smooth'}});}}
+function seek(t){{if(!player)return;player.currentTime=t;player.play();if(player.scrollIntoView)player.scrollIntoView({{behavior:'smooth',block:'start'}});}}
 document.querySelectorAll('.ts,.chapter').forEach(el=>el.addEventListener('click',()=>seek(parseFloat(el.dataset.t))));
+
+// Time cursor: as the audio plays, highlight the utterance currently being spoken
+// so the transcript scrolls with the sound (kept lightweight — a linear scan of
+// the pre-sorted start times on each timeupdate).
+const uttEls=Array.from(document.querySelectorAll('.utt'));
+const uttTimes=uttEls.map(u=>parseFloat(u.dataset.t)||0);
+let curUtt=-1;
+const CUR_CLS=['bg-emerald-50','dark:bg-emerald-900/20'];
+function highlightAt(t){{
+  let i=uttTimes.length-1;
+  while(i>0&&uttTimes[i]>t)i--;
+  if(i===curUtt)return;
+  if(curUtt>=0&&uttEls[curUtt])uttEls[curUtt].classList.remove(...CUR_CLS);
+  curUtt=i;
+  const el=uttEls[i];
+  if(el){{el.classList.add(...CUR_CLS);el.scrollIntoView({{behavior:'smooth',block:'nearest'}});}}
+}}
+player&&player.addEventListener('timeupdate',()=>highlightAt(player.currentTime));
 const btns=document.querySelectorAll('.tab-btn'),panels=document.querySelectorAll('.tab-panel');
 btns.forEach(b=>b.addEventListener('click',()=>{{
   btns.forEach(x=>{{x.classList.remove('border-emerald-600','text-emerald-700','dark:text-emerald-400');x.classList.add('border-transparent','text-slate-500');}});
