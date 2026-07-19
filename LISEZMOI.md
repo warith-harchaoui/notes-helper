@@ -8,7 +8,7 @@
 
 **Un enregistreur 100 % local, gratuit et open source qui transforme n'importe quelle conversation en compte-rendu diarisé (voix séparées), nommé et vérifiable — et rien ne quitte votre appareil, sauf si vous le décidez.** Enregistrez ou importez un audio : Notes Helper sépare les voix, les transcrit, nomme chaque interlocuteur **une seule fois et pour toujours, sur votre appareil** et rédige une synthèse structurée et sourcée — entièrement sur votre machine.
 
-Par [Warith HARCHAOUI](https://linkedin.com/in/warith-harchaoui) · [🌍 deraison.ai/fr/notes-helper](https://deraison.ai/fr/notes-helper)
+Par [Warith HARCHAOUI](https://linkedin.com/in/warith-harchaoui)
 
 ## Documentation
 
@@ -48,7 +48,7 @@ Ce qui fonctionne aujourd'hui :
 
 ### Depuis les sources
 
-Notes Helper n'est pas encore sur PyPI — installez depuis GitHub, épinglé au tag de version :
+Installez depuis GitHub, épinglé au tag de version :
 
 ```bash
 pip install "git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"
@@ -62,8 +62,6 @@ pip install "notes-helper[capture] @ git+https://github.com/warith-harchaoui/not
 pip install "notes-helper[docs]    @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"   # md2star : export DOCX/PDF/PPTX
 pip install "notes-helper[all]     @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"   # tout
 ```
-
-> **Publication PyPI bientôt disponible.**
 
 Il faut toujours `ffmpeg` dans le PATH (décodage/rééchantillonnage audio) et `ollama serve` en marche (synthèse locale) :
 
@@ -107,23 +105,13 @@ Pour le catalogue complet de recettes, voir [📋 EXAMPLES.md](https://github.co
 
 Trois couches sur une seule couture (trames 16 kHz mono float32) :
 
-| Couche | Composant | Rôle |
-|---|---|---|
-| **ENTRÉE** | [`capture-helper`](https://github.com/warith-harchaoui/capture-helper) | micro / fichier / écran (iOS : `AVAudioEngine` natif, même trame) |
-| **TRAITEMENT** | [`vocal-helper`](https://github.com/warith-harchaoui/vocal-helper) | Silero VAD → diarisation TitaNet → ASR whisper.cpp → LLM local |
-| **SORTIE** | `build_page` · [`md2star`](https://github.com/warith-harchaoui/md2star) | GUI HTML · Markdown (toute cible) · DOCX/PDF/PPTX |
+| Couche | Composant |
+|---|---|
+| **ENTRÉE** | [`capture-helper`](https://github.com/warith-harchaoui/capture-helper) |
+| **TRAITEMENT** | [`vocal-helper`](https://github.com/warith-harchaoui/vocal-helper) |
+| **SORTIE** | `build_page` · [`md2star`](https://github.com/warith-harchaoui/md2star) |
 
 Voir [📄 PRODUCT.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PRODUCT.md), [🗺️ PLAN.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PLAN.md) et [🔭 LANDSCAPE.md](https://github.com/warith-harchaoui/notes-helper/blob/main/LANDSCAPE.md).
-
-## Configuration
-
-Copiez le template et remplissez au besoin (tout est optionnel — défauts locaux sinon) :
-
-```bash
-cp notes_helper_config.json.example notes_helper_config.json   # gitignoré ; ne jamais committer la vraie config
-```
-
-Clés : `ollama_url`, `ollama_model`, `whisper_model`, `language`, `db_path`, `hf_token` (optionnel).
 
 ## Tests
 

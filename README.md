@@ -2,13 +2,15 @@
 
 [🇫🇷](https://github.com/warith-harchaoui/notes-helper/blob/main/LISEZMOI.md) · [🇬🇧](https://github.com/warith-harchaoui/notes-helper/blob/main/README.md)
 
+
 [![CI](https://github.com/warith-harchaoui/notes-helper/actions/workflows/ci.yml/badge.svg)](https://github.com/warith-harchaoui/notes-helper/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/warith-harchaoui/notes-helper/blob/main/LICENSE) [![Python](https://img.shields.io/badge/python-3.10%E2%80%933.13-blue.svg)](#) [![Local-first](https://img.shields.io/badge/privacy-local--first-2f6f5e.svg)](#the-promise)
 
-`Notes Helper` belongs to a collection of libraries called **AI Helpers**, developed for building Artificial Intelligence.
+![Notes Helper Logo](assets/logo.png)
+
 
 **A fully-local, free, open-source recorder that turns any conversation into a diarized, speaker-named, verifiable report — and nothing leaves your device unless you decide.** Record or import audio, and Notes Helper separates the voices, transcribes them, names each speaker **once and forever on your device**, and writes a structured, grounded summary — entirely on your own machine.
 
-By [Warith HARCHAOUI](https://linkedin.com/in/warith-harchaoui) · [🌍 deraison.ai/fr/notes-helper](https://deraison.ai/fr/notes-helper)
+By [Warith HARCHAOUI](https://linkedin.com/in/warith-harchaoui)
 
 ## Documentation
 
@@ -47,7 +49,7 @@ What ships today:
 
 ### From source
 
-Notes Helper is not on PyPI yet — install from GitHub, pinned to the release tag:
+Install from GitHub, pinned to the release tag:
 
 ```bash
 pip install "git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"
@@ -61,8 +63,6 @@ pip install "notes-helper[capture] @ git+https://github.com/warith-harchaoui/not
 pip install "notes-helper[docs]    @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"   # md2star: DOCX/PDF/PPTX export
 pip install "notes-helper[all]     @ git+https://github.com/warith-harchaoui/notes-helper.git@v0.5.0-alpha.4"   # everything
 ```
-
-> **PyPI release coming soon.**
 
 You still need `ffmpeg` on PATH (audio decode/resample) and `ollama serve` running (local synthesis):
 
@@ -124,23 +124,13 @@ For the full catalog of recipes, see [📋 EXAMPLES.md](https://github.com/warit
 
 Three layers over one seam (16 kHz mono float32 frames):
 
-| Layer | Component | Role |
-|---|---|---|
-| **INPUT** | [`capture-helper`](https://github.com/warith-harchaoui/capture-helper) | mic / file / screen (iOS: native `AVAudioEngine`, same frame) |
-| **PROCESS** | [`vocal-helper`](https://github.com/warith-harchaoui/vocal-helper) | Silero VAD → TitaNet diarization → whisper.cpp ASR → local LLM |
-| **OUTPUT** | `build_page` · [`md2star`](https://github.com/warith-harchaoui/md2star) | HTML GUI · Markdown (any target) · DOCX/PDF/PPTX |
+| Layer | Component |
+|---|---|
+| **INPUT** | [`capture-helper`](https://github.com/warith-harchaoui/capture-helper) |
+| **PROCESS** | [`vocal-helper`](https://github.com/warith-harchaoui/vocal-helper) |
+| **OUTPUT** | `build_page` · [`md2star`](https://github.com/warith-harchaoui/md2star) |
 
 See [📄 PRODUCT.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PRODUCT.md), [🗺️ PLAN.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PLAN.md), and [🔭 LANDSCAPE.md](https://github.com/warith-harchaoui/notes-helper/blob/main/LANDSCAPE.md).
-
-## Configuration
-
-Copy the template and fill what you need (all optional — sane local defaults otherwise):
-
-```bash
-cp notes_helper_config.json.example notes_helper_config.json   # gitignored; never commit real config
-```
-
-Keys: `ollama_url`, `ollama_model`, `whisper_model`, `language`, `db_path`, optional `hf_token`.
 
 ## Tests
 
