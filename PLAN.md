@@ -67,6 +67,13 @@ des **adaptateurs**.
     (`diar` : segmentation + embeddings, crate **`nh-sherpa`** ✅ 2026-07-19 via
     `sherpa-rs` 0.6.8 — stub par défaut / réel sous `--features sherpa-onnx`,
     `#![forbid(unsafe_code)]`), **llama.cpp** (`synth`) — features de build gérées (cmake).
+  - **`router` (aiguilleur diarisation) ✅ 2026-07-20** : `nh_core::router::select_diarization`
+    — traduction fidèle de `vocal_helper.router` (la *toolbox*), le seul étage à vraie
+    bifurcation. Décide `(mode, backend)` selon live/durée/nb-locuteurs/torch-free et porte
+    **qualité (DER) + vitesse (RTF) + raison** ; enums `DiarMode`/`DiarBackend`, table
+    `_PROFILE` re-validée (2026-07-19) + ADR 0002. Pur, sans ML, 7 tests unités traduits de
+    `tests/test_router.py` + doctests. Câble l'`OfflineDiarStage`/`OnlineDiarStage` réels une
+    fois branchés.
   - `pipeline::offline` : whole-buffer diar (qualité max) → ASR batchée → `synth`
     (résumé/thèmes/décisions/actions/chapitres/citations) → `Report`.
   - `models::ModelManager` : fetch depuis le **FTP de Warith**, **hash-check**, cache

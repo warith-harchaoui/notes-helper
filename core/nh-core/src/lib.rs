@@ -5,7 +5,8 @@
 //! This crate holds the parts of Notes Helper that are identical on every target
 //! (macOS, Linux, Windows, iOS, Android): the domain vocabulary ([`model`]), the
 //! trait boundary to the outside world ([`ports`]), the typed error surface
-//! ([`error`]), and the per-discussion orchestration ([`session`]).
+//! ([`error`]), the study-grounded diarization backend [`router`], and the
+//! per-discussion orchestration ([`session`]).
 //!
 //! It follows the ports-and-adapters design (see `ARCHITECTURE.md`): the core only
 //! ever talks to the traits in [`ports`]; each platform and each engine supplies its
@@ -26,9 +27,11 @@ pub mod model;
 pub mod models;
 pub mod pipeline;
 pub mod ports;
+pub mod router;
 pub mod session;
 
 // Re-export the handful of types callers reach for most, so shells can `use nh_core::…`
 // without knowing the internal module layout.
 pub use error::{CoreError, Result};
+pub use router::{select_diarization, BackendPlan, DiarBackend, DiarMode, DiarizationQuery};
 pub use session::Session;
