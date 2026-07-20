@@ -40,6 +40,7 @@ pub use error::{CoreError, Result};
 pub use lid::{
     detect_language_regions, regions_from_posteriors, snap_boundaries_to_silence, LangRegion,
 };
+pub use pipeline::{DiarizeThenAsr, EotParams, LidParams, OfflinePipeline, SingleSpeakerDiarizer};
 pub use router::{select_diarization, BackendPlan, DiarBackend, DiarMode, DiarizationQuery};
 pub use session::Session;
 pub use settings::resolve_diarization_engines_url;
