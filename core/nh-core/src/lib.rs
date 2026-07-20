@@ -22,6 +22,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod eot;
 pub mod error;
 pub mod lid;
 pub mod model;
@@ -34,6 +35,7 @@ pub mod settings;
 
 // Re-export the handful of types callers reach for most, so shells can `use nh_core::…`
 // without knowing the internal module layout.
+pub use eot::{gate_turns, VoicedSpan};
 pub use error::{CoreError, Result};
 pub use lid::{
     detect_language_regions, regions_from_posteriors, snap_boundaries_to_silence, LangRegion,

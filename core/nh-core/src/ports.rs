@@ -67,6 +67,24 @@ pub trait LanguageDetector {
     fn detect_language(&self, audio: &AudioBuffer) -> Result<Vec<(String, f32)>>;
 }
 
+/// Judges whether a (partial) utterance looks like a *completed* speaker turn.
+///
+/// A small local LLM lives behind this port (see the nh-synth adapter). It powers
+/// [`crate::eot::gate_turns`], which merges a breath-split utterance back together
+/// instead of letting a rigid VAD silence threshold fragment one thought into
+/// several — the semantic end-of-turn idea from the toolbox. Kept a port so the
+/// gate is testable against a mock, with Ollama swapped in at runtime.
+pub trait EndOfTurnClassifier {
+    /// Return `true` iff `text` reads as a complete turn (the speaker could hand
+    /// over the floor). Implementations should fail *open* where sensible — an
+    /// offline classifier returning an error is treated by the gate as "complete"
+    /// so gating never swallows a turn.
+    ///
+    /// # Errors
+    /// Returns [`crate::error::CoreError::Synthesis`] on classifier failure.
+    fn is_complete_turn(&self, text: &str) -> Result<bool>;
+}
+
 /// Segments a buffer into speaker turns (who-spoke-when), WITHOUT transcribing.
 ///
 /// sherpa-onnx (VAD + segmentation + speaker embeddings) lives behind this port. Its

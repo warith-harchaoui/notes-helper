@@ -23,6 +23,8 @@ use nh_core::error::Result;
 use nh_core::model::{Action, Chapter, MeetingContext, Quote, SpeakerId, Summary, Transcript};
 use nh_core::ports::Synthesizer;
 
+/// Semantic end-of-turn classifier over any [`LlmClient`] (see [`eot::LlmEotClassifier`]).
+pub mod eot;
 #[cfg(feature = "ollama")]
 pub mod ollama;
 
