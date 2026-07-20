@@ -29,9 +29,11 @@ pub mod pipeline;
 pub mod ports;
 pub mod router;
 pub mod session;
+pub mod settings;
 
 // Re-export the handful of types callers reach for most, so shells can `use nh_core::…`
 // without knowing the internal module layout.
 pub use error::{CoreError, Result};
 pub use router::{select_diarization, BackendPlan, DiarBackend, DiarMode, DiarizationQuery};
 pub use session::Session;
+pub use settings::resolve_diarization_engines_url;
