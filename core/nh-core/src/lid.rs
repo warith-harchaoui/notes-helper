@@ -242,6 +242,64 @@ pub fn regions_from_posteriors(
     absorb_short_regions(&coalesce(&regions), min_region_s)
 }
 
+/// Move each internal region boundary to the lowest-energy point nearby.
+///
+/// A code-switch happens at a pause, not mid-word. For each shared boundary this
+/// searches ±`snap_s` for the 50 ms frame of minimum RMS and snaps the boundary
+/// to that frame's centre — the pure DSP refinement step of the toolbox's lid
+/// method, operating on the raw mono `pcm` at `sample_rate`. Fewer than two
+/// regions, or a non-positive `snap_s`, leaves the regions untouched.
+pub fn snap_boundaries_to_silence(
+    pcm: &[f32],
+    sample_rate: u32,
+    regions: &[LangRegion],
+    snap_s: f64,
+) -> Vec<LangRegion> {
+    if regions.len() < 2 || snap_s <= 0.0 {
+        return regions.to_vec();
+    }
+    let rate = f64::from(sample_rate);
+    // A 50 ms analysis frame (at least one sample), matching the toolbox.
+    let frame = ((0.05 * rate) as usize).max(1);
+    let n = pcm.len();
+    let dur = n as f64 / rate;
+    let mut out = regions.to_vec();
+    for i in 0..out.len() - 1 {
+        let b = out[i].t1;
+        let lo = (b - snap_s).max(0.0);
+        let hi = (b + snap_s).min(dur);
+        let a0 = (lo * rate) as usize;
+        let a1 = (hi * rate) as usize;
+        // range(a0, max(a0+1, a1-frame), frame) — always at least one probe.
+        let stop = (a0 + 1).max(a1.saturating_sub(frame));
+        let (mut best_t, mut best_rms) = (b, f64::INFINITY);
+        let mut s = a0;
+        while s < stop {
+            let end = (s + frame).min(n);
+            let seg = if s < n { &pcm[s..end] } else { &[][..] };
+            // RMS over the available samples; an empty tail slice scores infinity.
+            let rms = if seg.is_empty() {
+                f64::INFINITY
+            } else {
+                let mean_sq: f64 = seg
+                    .iter()
+                    .map(|&x| f64::from(x) * f64::from(x))
+                    .sum::<f64>()
+                    / seg.len() as f64;
+                mean_sq.sqrt()
+            };
+            if rms < best_rms {
+                best_rms = rms;
+                best_t = (s as f64 + frame as f64 / 2.0) / rate;
+            }
+            s += frame;
+        }
+        out[i].t1 = best_t;
+        out[i + 1].t0 = best_t;
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,6 +373,35 @@ mod tests {
         let centers = [0.0, 1.0];
         let post = [vec![], vec![]];
         assert!(regions_from_posteriors(&centers, &[], &post, 2.0, 1.0, 0.0, 0.5).is_empty());
+    }
+
+    #[test]
+    fn snap_moves_boundary_into_a_nearby_silent_gap() {
+        // 2 s at 1 kHz: loud everywhere except a silent gap in [0.9, 1.1) s.
+        let sr = 1_000u32;
+        let mut pcm = vec![1.0f32; 2_000];
+        for s in pcm.iter_mut().take(1_100).skip(900) {
+            *s = 0.0; // carve out the pause
+        }
+        let regions = [r("fr", 0.0, 1.05), r("en", 1.05, 2.0)];
+        let out = snap_boundaries_to_silence(&pcm, sr, &regions, 0.2);
+        // The shared boundary snaps to the low-energy frame inside the gap.
+        assert!((0.9..1.1).contains(&out[0].t1), "snapped to {}", out[0].t1);
+        assert_eq!(out[0].t1, out[1].t0); // still a shared boundary
+    }
+
+    #[test]
+    fn snap_is_a_noop_below_two_regions_or_nonpositive_radius() {
+        let one = [r("fr", 0.0, 1.0)];
+        assert_eq!(
+            snap_boundaries_to_silence(&[0.0; 100], 1_000, &one, 0.2),
+            one
+        );
+        let two = [r("fr", 0.0, 1.0), r("en", 1.0, 2.0)];
+        assert_eq!(
+            snap_boundaries_to_silence(&[0.0; 2_000], 1_000, &two, 0.0),
+            two
+        );
     }
 
     #[test]
