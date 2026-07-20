@@ -19,7 +19,7 @@ dependencies = [
     "scikit-learn>=1.3",
     "soundfile>=0.12",
     # central logging surface (osh.info/warning/error/debug + osh.verbosity)
-    "os-helper>=1.5.0",
+    "os-helper>=1.7.2",
     # reads the locales/i18n.yaml language + prompt catalog (notes_helper.i18n)
     "PyYAML>=6.0",
 ]
@@ -28,14 +28,14 @@ dependencies = [
 # so `pip install notes-helper` stays light and the sovereignty story is explicit.
 [project.optional-dependencies]
 process = [
-    "vocal-helper>=0.4.1",
+    "vocal-helper>=0.6.0",
 ]
 capture = [
-    "capture-helper>=0.2.3",
+    "capture-helper>=0.3.0",
 ]
 docs = [
     # md2star: Markdown -> DOCX / PPTX / PDF, embeddable & open source
-    "md2star>=2.4.1",
+    "md2star>=2.8.0",
 ]
 llm = [
     "requests>=2.31",   # talk to a local Ollama at 127.0.0.1:11434

@@ -75,41 +75,58 @@ def compile_doc(md_path: str, out_path: str, fmt: str) -> str:
 
     Notes
     -----
-    The Python API is probed defensively: md2star has exposed the conversion
-    under several names across versions (``convert``, ``render``, ``to_<fmt>``,
-    ``md_to_<fmt>``), with either a three-argument ``(src, dst, fmt)`` or a
-    two-argument ``(src, dst)`` signature. We try each callable and swallow
-    :class:`TypeError` to fall through to the next signature/name, so a partial
-    API surface still works.
+    The conversion is resolved defensively across md2star versions. md2star
+    >= 2.6 exposes ``md2star.cli._convert(fmt, argv)`` (the in-process entry its
+    own HTTP ``/convert`` uses) and a subcommand CLI (``md2star docx in.md``);
+    md2star <= 2.4 exposed top-level callables (``convert`` / ``render`` /
+    ``to_<fmt>``) and a flat CLI (``in.md --to docx``). We try the modern
+    in-process path, then the legacy callables, then the CLI (modern form
+    first), so both old and new installs keep working.
     """
     fmt = fmt.lower()
     if fmt not in _FMTS:
         raise ValueError(f"unsupported format {fmt!r} (md2star: {sorted(_FMTS)})")
 
     # 1) Embeddable Python API (preferred — stays in-process, no subprocess).
+    #    md2star >= 2.6 drives every format through ``md2star.cli._convert(fmt,
+    #    argv)`` (the same entry point its own FastAPI ``/convert`` calls); it
+    #    returns a process-style exit code and takes the post-subcommand argv.
     try:
-        import md2star  # type: ignore
+        from md2star.cli import _convert  # type: ignore
 
-        for fn in ("convert", "render", "to_" + fmt, "md_to_" + fmt):
-            f = getattr(md2star, fn, None)
-            if callable(f):
-                try:
-                    # convert/render take the format explicitly; the specialised
-                    # to_<fmt>/md_to_<fmt> helpers already imply it.
-                    f(md_path, out_path, fmt) if fn in ("convert", "render") else f(
-                        md_path, out_path
-                    )
-                    return out_path
-                except TypeError:
-                    # Wrong arity for this md2star version — try the next name.
-                    continue
+        rc = _convert(fmt, [md_path, "-o", out_path])
+        if rc == 0:
+            return out_path
+        osh.debug(f"md2star _convert({fmt!r}) exit={rc}; trying other paths")
     except ImportError:
-        # md2star not importable; the CLI fallback below is our next best hope.
-        osh.debug("md2star Python API unavailable; trying the CLI fallback")
+        # Older md2star (<= 2.4) exposed the conversion as top-level callables.
+        try:
+            import md2star  # type: ignore
 
-    # 2) CLI fallback — only if the md2star executable is on PATH.
+            for fn in ("convert", "render", "to_" + fmt, "md_to_" + fmt):
+                f = getattr(md2star, fn, None)
+                if callable(f):
+                    try:
+                        # convert/render take the format explicitly; the
+                        # specialised to_<fmt>/md_to_<fmt> helpers imply it.
+                        f(md_path, out_path, fmt) if fn in ("convert", "render") else f(
+                            md_path, out_path
+                        )
+                        return out_path
+                    except TypeError:
+                        # Wrong arity for this md2star version — try the next.
+                        continue
+        except ImportError:
+            osh.debug("md2star Python API unavailable; trying the CLI fallback")
+
+    # 2) CLI fallback — only if an md2star executable is on PATH. md2star >= 2.6
+    #    is subcommand-first (``md2star docx in.md -o out.docx``); older builds
+    #    took a flat ``in.md --to docx -o out.docx``. Try the modern form first.
     exe = shutil.which("md2star")
     if exe:
+        modern = subprocess.run([exe, fmt, md_path, "-o", out_path])
+        if modern.returncode == 0:
+            return out_path
         subprocess.run([exe, md_path, "--to", fmt, "-o", out_path], check=True)
         return out_path
 

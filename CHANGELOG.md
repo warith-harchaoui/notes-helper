@@ -32,6 +32,20 @@ All notable changes to this project are documented here. Format based on
   like `{"texte": "…"}` into its text, so `{'texte': …}` never appears on the page.
   The Actions table dropped its due-date (`Échéance`) column — action + responsable
   only. Covered by `tests/test_outputs_text.py`.
+- **Document export tracks the current md2star.** `outputs/docs.compile_doc` now
+  drives md2star ≥ 2.6 through its in-process `md2star.cli._convert(fmt, argv)`
+  entry point and, in the CLI fallback, the subcommand form
+  (`md2star docx in.md -o out.docx`). The previous top-level probes
+  (`convert`/`render`/`to_<fmt>`) and the flat `--to` CLI were removed upstream, so
+  DOCX/PDF/PPTX export was silently failing on md2star ≥ 2.6; both legacy paths are
+  kept as fallbacks so older installs still work. Verified end-to-end producing a
+  real `.docx` on md2star 2.8.0.
+
+### Dependencies
+- Raised the AI Helpers suite floors to the released, tested baselines:
+  `os-helper>=1.7.2`, `vocal-helper>=0.6.0` (flat-layout package; the consumed
+  ASR/VAD/diarization symbols are unchanged), `capture-helper>=0.3.0`,
+  `md2star>=2.8.0`.
 
 ## [0.4.1] - 2026-07-15
 
