@@ -28,7 +28,7 @@ fn transcribes_real_clip() {
     let audio = WavFileSource::new(wav).load().expect("load wav");
 
     // Transcribe with the real engine and assert we got non-empty text back.
-    let engine = WhisperAsr::new(model);
+    let engine = WhisperAsr::load(model).expect("load whisper model");
     let utterances = engine.transcribe(&audio).expect("transcribe");
     assert!(!utterances.is_empty(), "expected at least one utterance");
 

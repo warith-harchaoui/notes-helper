@@ -8,9 +8,12 @@
 //! default `cargo test` fast and green while the real engine is opt-in and validated in a
 //! dedicated build (`cargo test -p nh-whisper --features whisper-cpp`).
 //!
-//! Beyond transcription this adapter exposes [`WhisperAsr::detect_language`], reading
-//! whisper's language head (posterior over every language code) — the model half the
-//! [`nh_core::lid`] region segmenter consumes. The model is loaded once and cached, and
+//! The model is loaded **eagerly** by [`WhisperAsr::load`] — a bad path or missing file
+//! fails fast at construction, not deep inside the first request, and there is no
+//! first-call latency spike (the app's standing rule: pre-load, don't lazy-init). Beyond
+//! transcription the adapter exposes [`WhisperAsr::detect_language`] via the
+//! [`nh_core::ports::LanguageDetector`] port, reading whisper's language head (posterior
+//! over every language code) — the model half the [`nh_core::lid`] segmenter consumes.
 //! whisper.cpp's own console logging is routed through the `log` facade (silenced by
 //! default) so it never pollutes the pipeline's output stream.
 //!
@@ -29,39 +32,20 @@ use nh_core::model::{AudioBuffer, Utterance};
 use nh_core::ports::{AsrEngine, LanguageDetector};
 
 /// An [`AsrEngine`](nh_core::ports::AsrEngine) backed by a whisper.cpp ggml model on disk.
+///
+/// Construct with [`WhisperAsr::load`], which loads the model up front.
 pub struct WhisperAsr {
     /// Path to the ggml model file (e.g. `ggml-base.bin`, or a quantized large-v3-turbo).
     model_path: PathBuf,
     /// Decode threads (whisper.cpp is CPU/Accelerate-bound off the GPU path).
     #[cfg(feature = "whisper-cpp")]
     threads: usize,
-    /// The loaded model, built once on first use and reused across calls — loading a
-    /// multi-hundred-MB ggml model per call would make the many-window language probe
-    /// (used by lid) unusable. `Err` caches a load failure so we fail the same way twice.
+    /// The model, loaded eagerly at construction and reused across every call.
     #[cfg(feature = "whisper-cpp")]
-    ctx: std::sync::OnceLock<std::result::Result<whisper_rs::WhisperContext, String>>,
+    ctx: whisper_rs::WhisperContext,
 }
 
 impl WhisperAsr {
-    /// Create an engine that will load the ggml model at `model_path` on first use.
-    pub fn new(model_path: impl Into<PathBuf>) -> Self {
-        Self {
-            model_path: model_path.into(),
-            #[cfg(feature = "whisper-cpp")]
-            threads: default_threads(),
-            #[cfg(feature = "whisper-cpp")]
-            ctx: std::sync::OnceLock::new(),
-        }
-    }
-
-    /// Override the decode thread count (defaults to the machine's core count, capped).
-    #[cfg(feature = "whisper-cpp")]
-    #[must_use]
-    pub fn with_threads(mut self, threads: usize) -> Self {
-        self.threads = threads.max(1);
-        self
-    }
-
     /// Borrow the configured model path (useful for logging/diagnostics).
     #[must_use]
     pub fn model_path(&self) -> &std::path::Path {
@@ -109,19 +93,34 @@ mod real {
     }
 
     impl WhisperAsr {
-        /// Lazily load and cache the whisper context, returning a shared reference.
-        fn context(&self) -> Result<&WhisperContext> {
+        /// Load the ggml model at `model_path` eagerly, returning a ready engine.
+        ///
+        /// The model is built up front so a bad path / unreadable file fails here rather
+        /// than on the first `transcribe`, and there is no first-call latency spike.
+        ///
+        /// # Errors
+        /// Returns [`CoreError::Transcription`] if the model cannot be loaded.
+        pub fn load(model_path: impl Into<PathBuf>) -> Result<Self> {
+            let model_path = model_path.into();
+            // Silence the native logging before we touch whisper.cpp at all.
             silence_native_logging_once();
-            let cached = self.ctx.get_or_init(|| {
-                WhisperContext::new_with_params(
-                    &self.model_path.to_string_lossy(),
-                    WhisperContextParameters::default(),
-                )
-                .map_err(|e| e.to_string())
-            });
-            cached
-                .as_ref()
-                .map_err(|e| CoreError::Transcription(format!("load whisper model: {e}")))
+            let ctx = WhisperContext::new_with_params(
+                &model_path.to_string_lossy(),
+                WhisperContextParameters::default(),
+            )
+            .map_err(|e| CoreError::Transcription(format!("load whisper model: {e}")))?;
+            Ok(Self {
+                model_path,
+                threads: default_threads(),
+                ctx,
+            })
+        }
+
+        /// Override the decode thread count (defaults to the machine's core count, capped).
+        #[must_use]
+        pub fn with_threads(mut self, threads: usize) -> Self {
+            self.threads = threads.max(1);
+            self
         }
     }
 
@@ -134,8 +133,8 @@ mod real {
         /// language is filtered out before it can surface — language is discovered, never
         /// defaulted.
         fn detect_language(&self, audio: &AudioBuffer) -> Result<Vec<(String, f32)>> {
-            let ctx = self.context()?;
-            let mut state = ctx
+            let mut state = self
+                .ctx
                 .create_state()
                 .map_err(|e| CoreError::Transcription(format!("whisper create state: {e}")))?;
             // The language head runs on the mel spectrogram, so compute it first.
@@ -164,8 +163,8 @@ mod real {
 
     impl AsrEngine for WhisperAsr {
         fn transcribe(&self, audio: &AudioBuffer) -> Result<Vec<Utterance>> {
-            let ctx = self.context()?;
-            let mut state = ctx
+            let mut state = self
+                .ctx
                 .create_state()
                 .map_err(|e| CoreError::Transcription(format!("whisper create state: {e}")))?;
 
@@ -211,9 +210,24 @@ mod real {
 // Stub implementation — compiled when the `whisper-cpp` feature is OFF (the default).
 // ---------------------------------------------------------------------------------------
 #[cfg(not(feature = "whisper-cpp"))]
+impl WhisperAsr {
+    /// Stub: the native whisper.cpp build is not compiled in, so there is nothing to
+    /// load. Fails fast (matching the eager-load contract) — enable the real engine with
+    /// `--features whisper-cpp`.
+    ///
+    /// # Errors
+    /// Always returns [`CoreError::Transcription`].
+    pub fn load(model_path: impl Into<PathBuf>) -> Result<Self> {
+        // Consume the path so the signature matches the real constructor exactly.
+        let _ = model_path.into();
+        Err(CoreError::Transcription(
+            "nh-whisper built without the `whisper-cpp` feature".to_string(),
+        ))
+    }
+}
+
+#[cfg(not(feature = "whisper-cpp"))]
 impl LanguageDetector for WhisperAsr {
-    /// Stub: the native whisper.cpp build is not compiled in. Enable the real language
-    /// head with `--features whisper-cpp`.
     fn detect_language(&self, _audio: &AudioBuffer) -> Result<Vec<(String, f32)>> {
         Err(CoreError::Transcription(
             "nh-whisper built without the `whisper-cpp` feature".to_string(),

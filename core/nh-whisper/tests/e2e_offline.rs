@@ -30,7 +30,10 @@ fn end_to_end_offline() {
 
     // Compose the baseline single-speaker diarizer with the real whisper ASR into the
     // pipeline's TranscriptionEngine, then run it over the whole buffer.
-    let engine = DiarizeThenAsr::new(SingleSpeakerDiarizer::new(), WhisperAsr::new(model));
+    let engine = DiarizeThenAsr::new(
+        SingleSpeakerDiarizer::new(),
+        WhisperAsr::load(model).expect("load whisper model"),
+    );
     let transcript = engine.transcribe(&audio).expect("transcribe");
 
     // The chain should produce at least one utterance attributed to S0 with real text.

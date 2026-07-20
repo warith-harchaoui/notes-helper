@@ -20,7 +20,7 @@ fn detects_language() {
     let wav = std::env::var("NH_WHISPER_WAV").expect("set NH_WHISPER_WAV");
 
     let audio = WavFileSource::new(wav).load().expect("load wav");
-    let engine = WhisperAsr::new(model);
+    let engine = WhisperAsr::load(model).expect("load whisper model");
 
     let posterior = engine.detect_language(&audio).expect("detect language");
     assert!(!posterior.is_empty(), "expected a language posterior");
@@ -45,7 +45,7 @@ fn segments_language_regions_end_to_end() {
     let wav = std::env::var("NH_WHISPER_WAV").expect("set NH_WHISPER_WAV");
 
     let audio = WavFileSource::new(wav).load().expect("load wav");
-    let engine = WhisperAsr::new(model);
+    let engine = WhisperAsr::load(model).expect("load whisper model");
 
     // 10 s windows every 3 s; smooth 6 s, keep >= 8 s regions, snap 1 s (toolbox defaults).
     let regions = nh_core::lid::detect_language_regions(&engine, &audio, 10.0, 3.0, 6.0, 8.0, 1.0)
