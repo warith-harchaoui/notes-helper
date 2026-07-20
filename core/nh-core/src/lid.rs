@@ -19,6 +19,12 @@
 //! Language is always *discovered* from the audio, never defaulted: empty or
 //! too-short input yields an empty region list rather than a fabricated language.
 
+use std::collections::BTreeMap;
+
+use crate::error::Result;
+use crate::model::AudioBuffer;
+use crate::ports::LanguageDetector;
+
 /// A contiguous mono-language span of audio, in seconds. `lang` is the ISO-639-1
 /// code discovered for `[t0, t1)`.
 #[derive(Debug, Clone, PartialEq)]
@@ -300,6 +306,119 @@ pub fn snap_boundaries_to_silence(
     out
 }
 
+/// A sampled language-posterior curve: `(centers[T], langs[L], post[T][L])` — window
+/// centre times, the candidate language axis, and each window's posterior over it.
+type PosteriorCurve = (Vec<f64>, Vec<String>, Vec<Vec<f64>>);
+
+/// Sample a per-window language posterior over time, using a [`LanguageDetector`].
+///
+/// Slides a `window_s` window at `hop_s` steps and reads the detector's posterior
+/// where at least one second of audio is present. Returns `(centers, langs, post)`:
+/// `centers[T]` window-centre times, `langs[L]` the candidate axis (adopted from
+/// the first usable window so nothing is filtered out), and `post[T][L]` each
+/// window's posterior projected onto that axis and renormalised. Translated from
+/// the toolbox `language_posterior_curve` (the windowing; the model call is the
+/// injected detector).
+fn language_posterior_curve(
+    detector: &dyn LanguageDetector,
+    audio: &AudioBuffer,
+    window_s: f64,
+    hop_s: f64,
+) -> Result<PosteriorCurve> {
+    let dur = audio.duration_s();
+    let sr = audio.sample_rate as usize;
+    let half = window_s / 2.0;
+    let mut centers: Vec<f64> = Vec::new();
+    let mut rows: Vec<Vec<(String, f32)>> = Vec::new();
+    // Slide a hop-spaced window, reading the head only where >= 1 s of audio exists
+    // (whisper cannot identify a language from less). hop_s <= 0 is guarded by the
+    // caller, so this loop always advances.
+    let mut t = 0.0;
+    while t < dur.max(hop_s) {
+        let a = (t - half).max(0.0);
+        let b = (t + half).min(dur);
+        let seg = audio.slice(a, b);
+        if seg.samples.len() >= sr {
+            rows.push(detector.detect_language(&seg)?);
+            centers.push(t.min(dur));
+        }
+        t += hop_s;
+    }
+    // No usable window (audio < 1 s): nothing to discover — an empty axis so callers
+    // treat the language as unknown rather than inventing one.
+    if rows.is_empty() {
+        return Ok((vec![0.0], Vec::new(), vec![Vec::new()]));
+    }
+    // Adopt the full candidate set from the first window as a stable, sorted axis.
+    let mut langs: Vec<String> = rows[0].iter().map(|(c, _)| c.clone()).collect();
+    langs.sort();
+    langs.dedup();
+    // Project each posterior onto that axis and renormalise to a proper distribution
+    // (the argmax later must compare like-for-like).
+    let post: Vec<Vec<f64>> = rows
+        .iter()
+        .map(|row| {
+            let map: BTreeMap<&str, f64> = row
+                .iter()
+                .map(|(c, p)| (c.as_str(), f64::from(*p)))
+                .collect();
+            let mut vals: Vec<f64> = langs
+                .iter()
+                .map(|c| map.get(c.as_str()).copied().unwrap_or(0.0))
+                .collect();
+            let s: f64 = vals.iter().sum();
+            if s > 0.0 {
+                for v in &mut vals {
+                    *v /= s;
+                }
+            } else {
+                // Zero-mass window → uniform prior over the axis.
+                let u = 1.0 / langs.len() as f64;
+                vals.iter_mut().for_each(|v| *v = u);
+            }
+            vals
+        })
+        .collect();
+    Ok((centers, langs, post))
+}
+
+/// Partition `audio` into mono-language regions with a [`LanguageDetector`].
+///
+/// The posterior-curve method end to end: sample the language curve over windows,
+/// then [`regions_from_posteriors`] (smooth → argmax → change-points → coalesce →
+/// absorb-short), then [`snap_boundaries_to_silence`]. `window_s`/`hop_s` shape the
+/// curve, `smooth_s` the anti-jitter sigma, `min_region_s` the shortest kept span,
+/// `snap_s` the pause-snap radius. Empty/too-short audio yields no region — language
+/// is discovered, never defaulted. (The toolbox's optional per-boundary posterior
+/// *refine* pass is left to a later step; curve → regions → snap already gives
+/// stable spans.)
+///
+/// # Errors
+/// Propagates any [`LanguageDetector::detect_language`] failure.
+pub fn detect_language_regions(
+    detector: &dyn LanguageDetector,
+    audio: &AudioBuffer,
+    window_s: f64,
+    hop_s: f64,
+    smooth_s: f64,
+    min_region_s: f64,
+    snap_s: f64,
+) -> Result<Vec<LangRegion>> {
+    if audio.samples.is_empty() || hop_s <= 0.0 {
+        return Ok(Vec::new());
+    }
+    let dur = audio.duration_s();
+    let (centers, langs, post) = language_posterior_curve(detector, audio, window_s, hop_s)?;
+    let regions =
+        regions_from_posteriors(&centers, &langs, &post, dur, hop_s, smooth_s, min_region_s);
+    Ok(snap_boundaries_to_silence(
+        &audio.samples,
+        audio.sample_rate,
+        &regions,
+        snap_s,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,6 +492,51 @@ mod tests {
         let centers = [0.0, 1.0];
         let post = [vec![], vec![]];
         assert!(regions_from_posteriors(&centers, &[], &post, 2.0, 1.0, 0.0, 0.5).is_empty());
+    }
+
+    /// A stand-in detector that "hears" fr in low-amplitude audio and en in high —
+    /// so a buffer whose first half is 1.0 and second half is 2.0 reads as fr→en,
+    /// letting us exercise the whole orchestration with no model.
+    struct MeanAmplitudeDetector;
+    impl LanguageDetector for MeanAmplitudeDetector {
+        fn detect_language(&self, audio: &AudioBuffer) -> Result<Vec<(String, f32)>> {
+            let n = audio.samples.len().max(1) as f32;
+            let mean: f32 = audio.samples.iter().sum::<f32>() / n;
+            // Closer to 1.0 ⇒ fr, closer to 2.0 ⇒ en; always the same 2-code axis.
+            let (fr, en) = if mean < 1.5 { (0.9, 0.1) } else { (0.1, 0.9) };
+            Ok(vec![("fr".to_string(), fr), ("en".to_string(), en)])
+        }
+    }
+
+    #[test]
+    fn detect_language_regions_splits_fr_then_en() {
+        // 20 s at 1 kHz: first half amplitude 1.0 (fr), second half 2.0 (en).
+        let sr = 1_000u32;
+        let mut samples = vec![1.0f32; 20_000];
+        samples[10_000..].fill(2.0);
+        let audio = AudioBuffer::new(sr, samples);
+        // 4 s windows every 2 s; no smoothing/snap so the assertion is exact-ish.
+        let regions =
+            detect_language_regions(&MeanAmplitudeDetector, &audio, 4.0, 2.0, 0.0, 1.0, 0.0)
+                .unwrap();
+        assert_eq!(regions.len(), 2, "expected fr then en, got {regions:?}");
+        assert_eq!(regions[0].lang, "fr");
+        assert_eq!(regions[1].lang, "en");
+        // The switch lands near the 10 s midpoint (within a window of it).
+        assert!(
+            (8.0..12.0).contains(&regions[0].t1),
+            "boundary at {}",
+            regions[0].t1
+        );
+    }
+
+    #[test]
+    fn detect_language_regions_of_empty_audio_is_empty() {
+        let audio = AudioBuffer::new(16_000, vec![]);
+        let regions =
+            detect_language_regions(&MeanAmplitudeDetector, &audio, 4.0, 2.0, 6.0, 1.0, 1.0)
+                .unwrap();
+        assert!(regions.is_empty());
     }
 
     #[test]

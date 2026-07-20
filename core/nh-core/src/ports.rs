@@ -52,6 +52,21 @@ pub trait AsrEngine {
     fn transcribe(&self, audio: &AudioBuffer) -> Result<Vec<Utterance>>;
 }
 
+/// Reads a spoken-language posterior from a buffer (whisper's language head).
+///
+/// whisper.cpp lives behind this port too (see the nh-whisper adapter). Splitting it out
+/// lets [`crate::lid::detect_language_regions`] segment a code-switching recording into
+/// mono-language spans against a mock detector in tests, with the real model swapped in at
+/// runtime. Language is discovered from the audio, never defaulted.
+pub trait LanguageDetector {
+    /// Return a posterior over language codes for `audio`: `(iso_code, probability)`
+    /// pairs covering the model's full candidate set (so any language can surface).
+    ///
+    /// # Errors
+    /// Returns [`crate::error::CoreError::Transcription`] on engine failure.
+    fn detect_language(&self, audio: &AudioBuffer) -> Result<Vec<(String, f32)>>;
+}
+
 /// Segments a buffer into speaker turns (who-spoke-when), WITHOUT transcribing.
 ///
 /// sherpa-onnx (VAD + segmentation + speaker embeddings) lives behind this port. Its

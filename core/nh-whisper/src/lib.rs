@@ -26,7 +26,7 @@ use std::path::PathBuf;
 use nh_core::error::{CoreError, Result};
 use nh_core::model::{AudioBuffer, Utterance};
 #[cfg(not(feature = "whisper-cpp"))]
-use nh_core::ports::AsrEngine;
+use nh_core::ports::{AsrEngine, LanguageDetector};
 
 /// An [`AsrEngine`](nh_core::ports::AsrEngine) backed by a whisper.cpp ggml model on disk.
 pub struct WhisperAsr {
@@ -85,7 +85,7 @@ fn default_threads() -> usize {
 mod real {
     use super::*;
     use nh_core::model::SpeakerId;
-    use nh_core::ports::AsrEngine;
+    use nh_core::ports::{AsrEngine, LanguageDetector};
     use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
     /// Route whisper.cpp + ggml's C-side `printf` logging through the `log` facade exactly
@@ -123,7 +123,9 @@ mod real {
                 .as_ref()
                 .map_err(|e| CoreError::Transcription(format!("load whisper model: {e}")))
         }
+    }
 
+    impl LanguageDetector for WhisperAsr {
         /// Read whisper's language head over `audio`: a posterior over every language
         /// code, sorted most-likely first. This is the model half the [`nh_core::lid`]
         /// region segmenter consumes (`language_posterior_curve` in the toolbox).
@@ -131,7 +133,7 @@ mod real {
         /// Returns `(code, probability)` pairs for whisper's full candidate set, so no
         /// language is filtered out before it can surface — language is discovered, never
         /// defaulted.
-        pub fn detect_language(&self, audio: &AudioBuffer) -> Result<Vec<(String, f32)>> {
+        fn detect_language(&self, audio: &AudioBuffer) -> Result<Vec<(String, f32)>> {
             let ctx = self.context()?;
             let mut state = ctx
                 .create_state()
@@ -209,10 +211,10 @@ mod real {
 // Stub implementation — compiled when the `whisper-cpp` feature is OFF (the default).
 // ---------------------------------------------------------------------------------------
 #[cfg(not(feature = "whisper-cpp"))]
-impl WhisperAsr {
+impl LanguageDetector for WhisperAsr {
     /// Stub: the native whisper.cpp build is not compiled in. Enable the real language
     /// head with `--features whisper-cpp`.
-    pub fn detect_language(&self, _audio: &AudioBuffer) -> Result<Vec<(String, f32)>> {
+    fn detect_language(&self, _audio: &AudioBuffer) -> Result<Vec<(String, f32)>> {
         Err(CoreError::Transcription(
             "nh-whisper built without the `whisper-cpp` feature".to_string(),
         ))

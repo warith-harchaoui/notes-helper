@@ -35,7 +35,9 @@ pub mod settings;
 // Re-export the handful of types callers reach for most, so shells can `use nh_core::…`
 // without knowing the internal module layout.
 pub use error::{CoreError, Result};
-pub use lid::{regions_from_posteriors, snap_boundaries_to_silence, LangRegion};
+pub use lid::{
+    detect_language_regions, regions_from_posteriors, snap_boundaries_to_silence, LangRegion,
+};
 pub use router::{select_diarization, BackendPlan, DiarBackend, DiarMode, DiarizationQuery};
 pub use session::Session;
 pub use settings::resolve_diarization_engines_url;
