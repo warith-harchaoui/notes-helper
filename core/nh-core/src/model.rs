@@ -194,6 +194,54 @@ impl AudioBuffer {
         let end = end.clamp(start, self.samples.len());
         AudioBuffer::new(self.sample_rate, self.samples[start..end].to_vec())
     }
+
+    /// Split the buffer into fixed `frame_ms`-length [`PcmFrame`]s (the cursor
+    /// chunker translated from the toolbox `vocal_helper.sources`).
+    ///
+    /// Each frame carries a sample-offset timestamp (`t_abs_s = cursor / rate`),
+    /// which is exact and reproducible regardless of playback pacing — the pure,
+    /// timing-only half of `from_wav_file` / `from_numpy_array`, with the async
+    /// real-time sleep left to the streaming adapter. The final short frame is
+    /// right-padded with zeros so every consumer sees a uniform length. A zero
+    /// `frame_ms` (or rate) yields no frames rather than looping forever.
+    ///
+    /// # Examples
+    /// ```
+    /// use nh_core::model::AudioBuffer;
+    /// // 0.5 s at 16 kHz, in 100 ms frames → 5 frames of 1600 samples.
+    /// let buf = AudioBuffer::new(16_000, vec![0.0; 8_000]);
+    /// let frames = buf.frames(100);
+    /// assert_eq!(frames.len(), 5);
+    /// assert_eq!(frames[0].samples.len(), 1_600);
+    /// assert!((frames[1].t_abs_s - 0.1).abs() < 1e-9);
+    /// ```
+    #[must_use]
+    pub fn frames(&self, frame_ms: u32) -> Vec<PcmFrame> {
+        // frame_samples = rate * frame_ms / 1000 (integer, matching the toolbox).
+        let frame_samples = (self.sample_rate as usize).saturating_mul(frame_ms as usize) / 1000;
+        // A zero-length frame would never advance the cursor — refuse to loop.
+        if frame_samples == 0 {
+            return Vec::new();
+        }
+        let rate = f64::from(self.sample_rate);
+        let n = self.samples.len();
+        let mut frames = Vec::with_capacity(n.div_ceil(frame_samples));
+        let mut cursor = 0usize;
+        while cursor < n {
+            let end = (cursor + frame_samples).min(n);
+            let mut samples = self.samples[cursor..end].to_vec();
+            // Right-pad the tail frame with zeros to keep the uniform-length contract.
+            samples.resize(frame_samples, 0.0);
+            frames.push(PcmFrame {
+                // Sample-offset timestamp — deterministic, not wall-clock.
+                t_abs_s: cursor as f64 / rate,
+                sample_rate: self.sample_rate,
+                samples,
+            });
+            cursor += frame_samples;
+        }
+        frames
+    }
 }
 
 /// A single live PCM frame (used by the online/streaming path, M4).
@@ -430,4 +478,35 @@ pub struct Report {
     pub transcript: Transcript,
     /// The local-LLM synthesis.
     pub summary: Summary,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frames_pad_the_short_tail_and_stamp_sample_offsets() {
+        // 2500 samples at 1 kHz, 1000 ms frames → 3 frames (1000, 1000, 500→padded).
+        let buf = AudioBuffer::new(1_000, (0..2_500).map(|i| i as f32).collect());
+        let frames = buf.frames(1_000);
+        assert_eq!(frames.len(), 3);
+        assert!(frames.iter().all(|f| f.samples.len() == 1_000)); // uniform length
+                                                                  // The tail frame carries 500 real samples then 500 zeros.
+        assert_eq!(frames[2].samples[499], 2_499.0);
+        assert!(frames[2].samples[500..].iter().all(|&s| s == 0.0));
+        // Sample-offset timestamps: 0 s, 1 s, 2 s.
+        assert!((frames[0].t_abs_s - 0.0).abs() < 1e-9);
+        assert!((frames[1].t_abs_s - 1.0).abs() < 1e-9);
+        assert!((frames[2].t_abs_s - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn frames_of_empty_or_zero_length_are_empty_not_infinite() {
+        assert!(AudioBuffer::new(16_000, vec![]).frames(20).is_empty());
+        // A zero-length frame must not loop forever — it yields nothing.
+        assert!(AudioBuffer::new(16_000, vec![0.0; 100])
+            .frames(0)
+            .is_empty());
+        assert!(AudioBuffer::new(0, vec![0.0; 100]).frames(20).is_empty());
+    }
 }
