@@ -235,3 +235,5 @@ xcuserdata/
 !.env.example
 
 settings.yaml
+# session journal (kept local, like .private/)
+/todo.md
