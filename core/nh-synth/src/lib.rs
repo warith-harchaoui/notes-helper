@@ -353,6 +353,7 @@ mod tests {
                 text: "We decided to ship on Friday.".to_string(),
                 words: Vec::new(),
                 language: None,
+                confidence: None, // synth fixture: confidence irrelevant to summary tests
             }],
             speakers: Vec::new(),
         }

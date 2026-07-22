@@ -7,6 +7,9 @@
 [workspace]
 resolver = "2"
 members = ["nh-core", "nh-io", "nh-whisper", "nh-sherpa", "nh-synth"]
+# nh-run is a standalone runner (its own workspace) that turns on the heavy engine
+# features; keep it out of the core workspace so `cargo test --all` and CI stay light.
+exclude = ["nh-run"]
 
 # Shared release profile tuning applies to every crate in the workspace.
 [profile.release]

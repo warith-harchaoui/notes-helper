@@ -13,7 +13,9 @@ use std::collections::BTreeMap;
 use crate::eot::{gate_turns, VoicedSpan};
 use crate::error::Result;
 use crate::lid::{detect_language_regions, LangRegion};
-use crate::model::{AudioBuffer, DiarizedSegment, Speaker, SpeakerId, Transcript, Utterance};
+use crate::model::{
+    mean_confidence, AudioBuffer, DiarizedSegment, Speaker, SpeakerId, Transcript, Utterance,
+};
 use crate::ports::{
     AsrEngine, DiarizationEngine, EndOfTurnClassifier, LanguageDetector, TranscriptionEngine,
 };
@@ -80,6 +82,9 @@ impl<D: DiarizationEngine, A: AsrEngine> TranscriptionEngine for DiarizeThenAsr<
                 text,
                 words: Vec::new(),
                 language: None,
+                // Fold the turn's whisper segments into one duration-weighted confidence
+                // (offline path). `None` if the backend reported none — online stays intact.
+                confidence: mean_confidence(&parts),
             });
         }
 
@@ -399,6 +404,9 @@ impl TranscriptionEngine for OfflinePipeline<'_> {
                 text,
                 words: Vec::new(),
                 language: None,
+                // Fold the turn's whisper segments into one duration-weighted confidence
+                // (offline path). `None` if the backend reported none — online stays intact.
+                confidence: mean_confidence(&parts),
             });
         }
 
@@ -471,6 +479,7 @@ mod tests {
                 text: "hello".to_string(),
                 words: Vec::new(),
                 language: None,
+                confidence: None, // mock ASR: no probabilities to report
             }])
         }
     }

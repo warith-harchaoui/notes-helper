@@ -79,6 +79,44 @@ def to_wav16k(src: str, dst: str) -> str:
     return dst
 
 
+def decode_16k_mono(src: str) -> np.ndarray:
+    """Decode any audio file to a 16 kHz mono float32 array **in RAM** — no temp WAV.
+
+    Streams ffmpeg's raw ``f32le`` output straight into numpy, so a multi-hour recording is
+    never materialized as a ~500 MB working WAV on disk. The in-memory footprint is exactly
+    what the pipeline needs anyway (the decoded array); we simply skip the disk round-trip.
+
+    Parameters
+    ----------
+    src : str
+        Path to the source audio (any ffmpeg-decodable format).
+
+    Returns
+    -------
+    numpy.ndarray
+        1-D float32 waveform at :data:`SR`, samples in ``[-1, 1]``.
+
+    Raises
+    ------
+    RuntimeError
+        If ffmpeg is not found on ``PATH``.
+    subprocess.CalledProcessError
+        If ffmpeg exits non-zero.
+    """
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg not found on PATH (needed to decode audio)")
+    proc = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", src,
+         "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    # Own the buffer (frombuffer is a read-only view over ffmpeg's bytes) so downstream
+    # stages can slice/process freely.
+    return np.frombuffer(proc.stdout, dtype=np.float32).copy()
+
+
 def run(
     audio_path: str,
     out_dir: str,
@@ -122,21 +160,20 @@ def run(
     os.makedirs(out_dir, exist_ok=True)
     osh.info(f"=== notes-helper pipeline: {os.path.basename(audio_path)} ===")
 
-    wav = os.path.join(out_dir, "audio_16k.wav")
-    if not (audio_path.endswith(".wav") and _is_16k_mono(audio_path)):
-        # Anything that is not already 16 kHz mono WAV gets normalised by ffmpeg;
-        # an already-conforming WAV is copied to keep a self-contained out_dir.
-        osh.info("resampling to 16 kHz mono (ffmpeg)...")
-        to_wav16k(audio_path, wav)
-    else:
-        shutil.copyfile(audio_path, wav)
-
-    audio = _diar.load_audio(wav)
+    # Decode straight to a 16 kHz mono float32 array in RAM — the working audio never
+    # touches disk (no ~500 MB temp WAV). The small web audio for the player is encoded
+    # from the ORIGINAL file at the end of the run.
+    osh.info("decoding to 16 kHz mono in memory (ffmpeg)...")
+    audio = decode_16k_mono(audio_path)
     osh.info(f"audio: {len(audio) / SR / 60:.1f} min")
 
     segs, labels, X, ok, turns = _diar.diarize(audio, n_spk=n_spk)
     # Checkpoint the diarization so a later crash (or an identity re-run) does not
     # force recomputing VAD + embeddings, the expensive part of the pipeline.
+    # Re-ensure out_dir before each costly write: diarization and ASR can run for a long
+    # time, and if the directory disappears mid-flight (an external cleanup, a stray
+    # delete), we recreate it here rather than losing hours of compute at write time.
+    os.makedirs(out_dir, exist_ok=True)
     ckpt = os.path.join(out_dir, "diar_checkpoint.npz")
     np.savez(ckpt, segs=np.array(segs, dtype=object), labels=labels, X=X, ok=ok)
     osh.info(f"checkpoint -> {ckpt}")
@@ -167,13 +204,26 @@ def run(
     osh.info(f"transcribing {len(turns)} turns...")
     raw = _asr.transcribe(audio, turns, language=language, initial_prompt=initial_prompt)
     cleaned = _clean.clean(raw)
+    os.makedirs(out_dir, exist_ok=True)  # survive a mid-run removal of out_dir (see above)
     tr_path = os.path.join(out_dir, "transcript.json")
     with open(tr_path, "w") as f:
         json.dump(cleaned, f, ensure_ascii=False, indent=1)
     osh.info(f"=== done: {len(cleaned)} utterances -> {tr_path} ===")
 
+    # Encode small, loudness-normalized web audio (Opus + MP3) for the report player,
+    # straight from the ORIGINAL file (ffmpeg streams it — no working WAV involved). out_dir
+    # holds only the compact audio: a 4 h meeting is a few tens of MB, never ~500 MB. Best-
+    # effort — audio housekeeping must never sink the transcript we just wrote.
+    audio_sources: list[dict] = []
+    try:
+        from .webaudio import encode_web_audio
+
+        audio_sources = encode_web_audio(audio_path, out_dir)
+    except Exception as e:  # pragma: no cover - defensive: never sink a finished run
+        osh.warning(f"web-audio encode skipped: {e}")
+
     return {
-        "wav": wav,
+        "audio_sources": audio_sources,
         "checkpoint": ckpt,
         "transcript": tr_path,
         "speaker_mapping": mapping_path,

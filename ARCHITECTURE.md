@@ -47,7 +47,7 @@ Modules (un crate, ou un workspace de crates) :
 | `session` | Cycle de vie d'une discussion : sources → capture → traitement → rapport → dossier-par-session | — |
 | `source` | **Graphe OBS** (Q13) : N sources typées, online/offline, mixables → un flux PCM (+ vidéo) horodaté | port `AudioCapture`/`VideoCapture` |
 | `pipeline` | **Offline** (whole-buffer, qualité max) **et online** (streaming, léger délai) (Q5) : VAD → diarisation → ASR → synthèse roulante | moteurs ci-dessous |
-| `asr` | Transcription + timestamps mots | **whisper.cpp** (ggml) |
+| `asr` | Transcription + timestamps mots + **confiance** (proba des tokens whisper.cpp) | **whisper.cpp** (ggml) |
 | `diar` | VAD + diarisation + embeddings locuteur | **sherpa-onnx** (Q4) |
 | `synth` | Synthèse LLM locale (résumé/thèmes/décisions/actions/chapitres/citations) + **émotions Plutchik** (LLM-texte, Q7) | **llama.cpp** (GGUF) |
 | `emotion` | **SER audio** (Plutchik par le ton, Q7) — global + par locuteur | modèle ONNX via sherpa/ONNX RT |
@@ -65,6 +65,19 @@ Modules (un crate, ou un workspace de crates) :
   ligne→ASR→synthèse roulante) → **rapport rafraîchi avec léger délai**. Point dur
   assumé : **stabilité des étiquettes de locuteurs en ligne** (traité sérieusement,
   pas dérivé du batch).
+
+### Confiance de transcription (offline)
+Sur le chemin **offline**, chaque `Utterance` porte une **confiance** dans `[0,1]`
+(`Utterance.confidence: Option<f32>`) : la moyenne des probabilités des tokens de
+contenu renvoyées par whisper.cpp (`whisper_full_get_token_prob`, tokens spéciaux et
+horodatages exclus), agrégée par tour via `mean_confidence` (moyenne pondérée par la
+durée). Un tour whisper peut se scinder en plusieurs segments : on les replie en un
+seul score. C'est un **vrai plus de l'offline** : il alimente (1) le rapport, qui
+signale les passages douteux (« ⚠️ N% », seuil `LOW_CONFIDENCE`) au service de la
+promesse *vérifiable*, et (2) la **boucle de raffinement du contexte** (quels noms
+propres/termes se transcrivent avec assez de confiance pour être crus). Sur le chemin
+**online/streaming** — délibérément préservé — la confiance reste `None` (non mesurée)
+plutôt que fabriquée ; `#[serde(default)]` garde les anciens transcripts lisibles.
 
 ---
 

@@ -32,6 +32,7 @@ fn real_ollama_synthesis() {
                         .to_string(),
                 words: Vec::new(),
                 language: Some("fr".to_string()),
+                confidence: None, // real-synth fixture: confidence not exercised here
             },
             Utterance {
                 t0: 5.0,
@@ -40,6 +41,7 @@ fn real_ollama_synthesis() {
                 text: "Le budget est validé, on lance la campagne lundi.".to_string(),
                 words: Vec::new(),
                 language: Some("fr".to_string()),
+                confidence: None, // real-synth fixture: confidence not exercised here
             },
         ],
         speakers: Vec::new(),

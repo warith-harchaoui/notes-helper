@@ -36,6 +36,9 @@ capture = [
 docs = [
     # md2star: Markdown -> DOCX / PPTX / PDF, embeddable & open source
     "md2star>=2.8.0",
+    # kreuzberg: extract text from associated documents (PDF/DOCX/PPTX/...) so a slug's
+    # attached brief or manuscript becomes synth context. Text layer first, OCR on demand.
+    "kreuzberg>=4.9",
 ]
 llm = [
     "requests>=2.31",   # talk to a local Ollama at 127.0.0.1:11434

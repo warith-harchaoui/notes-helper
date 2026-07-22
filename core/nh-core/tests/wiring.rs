@@ -42,6 +42,7 @@ impl TranscriptionEngine for MockEngine {
             text: "hello world".to_string(),
             words: Vec::new(),
             language: Some("en".to_string()),
+            confidence: None, // wiring fixture: no ASR probabilities
         };
 
         Ok(Transcript {

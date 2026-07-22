@@ -34,9 +34,11 @@ Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 from __future__ import annotations
 
 import html
+import json
 import os
 import shutil
 
+from .. import i18n as _i18n
 from ..config import SPK_COLORS
 from ._text import as_text
 from ._timefmt import seconds as _seconds
@@ -105,7 +107,9 @@ def esc(t: object) -> str:
     return html.escape(t)
 
 
-def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
+def render_html(
+    transcript: list[dict], syn: dict, out_path: str, slide_sync: dict | None = None
+) -> str:
     """Render a self-contained interactive HTML report and copy its assets.
 
     Parameters
@@ -113,6 +117,14 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
     transcript : list[dict]
         Ordered utterances, each with ``"speaker"``, ``"t0"`` (start seconds) and
         ``"text"``. Used to build the transcript tab and its per-speaker filters.
+    slide_sync : dict, optional
+        Slide-sync payload from :func:`notes_helper.slides.build_slide_sync`
+        (``{"slides": [png…], "timeline": [{t0,t1,slide,score}…]}``). When present, a
+        slide panel is rendered next to the player and follows the audio **by content**:
+        the timeline maps each moment to the slide being discussed, so an out-of-order
+        deck (slides revisited in any order, e.g. 0→14→7→2→25) still shows the right one.
+        The timeline is inlined into the page (no ``fetch``, so it works from ``file://``);
+        only the PNGs are external. ``None`` (default) renders no slide panel.
     syn : dict
         The synthesis dictionary. Requires ``"meta"`` and ``"speakers"``; the
         optional ``"resume"``, ``"points_cles"``, ``"decisions"``, ``"actions"``,
@@ -138,6 +150,14 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
     """
     meta = syn["meta"]
     speakers = syn["speakers"]
+
+    # Report language is DISCOVERED, not assumed: the dominant language of the transcript
+    # text (majority vote). GUI labels are then pulled from the i18n catalog in that
+    # language. An explicit meta["lang"] wins if the caller set one.
+    lang = meta.get("lang") or _i18n.resolve_language(
+        texts=[u.get("text", "") for u in transcript[:300] if u.get("text")]
+    )
+    g = lambda mid: _i18n.gui(mid, lang)  # noqa: E731 - terse label accessor for the template
 
     def spk_name(sid: str) -> str:
         """Return a speaker's display name, falling back to the id itself."""
@@ -200,7 +220,7 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
     actions_html = (
         '<div class="overflow-x-auto"><table class="w-full text-left"><thead>'
         '<tr class="border-b-2 border-slate-200 dark:border-slate-700 text-sm uppercase tracking-wide text-slate-500">'
-        '<th class="py-2 pr-4 font-semibold">Action</th><th class="py-2 font-semibold">Responsable</th>'
+        f'<th class="py-2 pr-4 font-semibold">{g("col_action")}</th><th class="py-2 font-semibold">{g("col_owner")}</th>'
         "</tr></thead>"
         f"<tbody>{act_rows}</tbody></table></div>"
     )
@@ -261,22 +281,40 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
     src_tags = "".join(f'<source src="{esc(s["src"])}" type="{esc(s["type"])}">' for s in sources)
     audio_block = (
         f'<audio id="player" controls preload="none" class="w-full">{src_tags}'
-        f'<a href="{esc(sources[0]["src"])}">Télécharger l\'audio</a></audio>'
+        f'<a href="{esc(sources[0]["src"])}">{esc(g("download_audio"))}</a></audio>'
         if src_tags
+        else ""
+    )
+
+    # Slide-sync panel: an <img> that the player swaps to the content-matched slide on
+    # every timeupdate. The timeline is inlined into the script below; only the PNGs are
+    # external files. Rendered only when a slide_sync payload with pages is supplied.
+    has_slides = bool(slide_sync and slide_sync.get("slides"))
+    first_slide = esc(slide_sync["slides"][0]) if has_slides else ""
+    slidesync_js = json.dumps(slide_sync) if has_slides else "null"
+    slide_block = (
+        '<figure id="slide-panel" class="mt-6 no-print">'
+        f'<a id="slide-link" href="{first_slide}" target="_blank" rel="noopener">'
+        f'<img id="slide" src="{first_slide}" data-idx="0" alt="{esc(g("slide_alt"))}" '
+        'class="w-full rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm bg-white">'
+        '</a>'
+        f'<figcaption id="slide-cap" class="mt-2 text-center text-xs text-slate-400">{esc(g("slide"))} 1</figcaption>'
+        '</figure>'
+        if has_slides
         else ""
     )
 
     # Tab definitions: (id, label, pre-rendered inner HTML). The transcript tab's
     # inner HTML is None here and assembled below because it needs the search UI.
     tabs = [
-        ("resume", "Résumé", f'<div class="prose-lg max-w-none">{resume_html}</div>'),
-        ("points", "Points clés", keypoints_html),
-        ("decisions", "Décisions", f'<div class="space-y-3">{dec_html}</div>'),
-        ("actions", "Actions", actions_html),
-        ("chapitres", "Chapitres", f'<div class="space-y-3">{chap_html}</div>'),
-        ("themes", "Thèmes", f'<div class="grid gap-4 md:grid-cols-2">{themes_html}</div>'),
-        ("citations", "Citations", f'<div class="grid gap-4 md:grid-cols-2">{quotes_html}</div>'),
-        ("transcript", "Transcript", None),
+        ("resume", g("tab_summary"), f'<div class="prose-lg max-w-none">{resume_html}</div>'),
+        ("points", g("tab_keypoints"), keypoints_html),
+        ("decisions", g("tab_decisions"), f'<div class="space-y-3">{dec_html}</div>'),
+        ("actions", g("tab_actions"), actions_html),
+        ("chapitres", g("tab_chapters"), f'<div class="space-y-3">{chap_html}</div>'),
+        ("themes", g("tab_themes"), f'<div class="grid gap-4 md:grid-cols-2">{themes_html}</div>'),
+        ("citations", g("tab_quotes"), f'<div class="grid gap-4 md:grid-cols-2">{quotes_html}</div>'),
+        ("transcript", g("tab_transcript"), None),
     ]
     # The first tab is styled active; the rest get the muted/hover treatment.
     tab_btns = "".join(
@@ -297,10 +335,10 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
             # the pre-rendered rows.
             inner = (
                 '<div class="mb-4 flex flex-wrap items-center gap-3">'
-                '<input id="search" type="search" placeholder="Rechercher dans le transcript…" '
+                f'<input id="search" type="search" placeholder="{esc(g("search_placeholder"))}" '
                 'class="w-full max-w-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent px-3 py-2 text-sm">'
                 f'<div class="flex flex-wrap gap-2">{spk_filter_btns}</div>'
-                '<button id="reset-filter" class="text-sm text-slate-400 underline">tout afficher</button></div>'
+                f'<button id="reset-filter" class="text-sm text-slate-400 underline">{esc(g("show_all"))}</button></div>'
                 f'<div id="transcript" class="divide-y divide-slate-100 dark:divide-slate-800">{transcript_html}</div>'
             )
         panels.append(panel(tid, inner, i == 0))
@@ -312,11 +350,11 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
     # the ``document...`` calls and CSS below are browser code, not Python.
     # ------------------------------------------------------------------------
     doc = f"""<!DOCTYPE html>
-<html lang="fr" class="scroll-smooth">
+<html lang="{lang}" class="scroll-smooth">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{esc(meta["titre"])} — Compte-rendu</title>
+<title>{esc(meta["titre"])} — {esc(g("report_kicker"))}</title>
 <script src="assets/tailwind.js"></script>
 <script>tailwind.config={{darkMode:'media',theme:{{extend:{{fontFamily:{{sans:['Roboto','system-ui','sans-serif'],serif:['"Roboto Serif"','Georgia','serif'],mono:['"Roboto Mono"','monospace']}}}}}}}}</script>
 <link href="assets/fonts.css" rel="stylesheet">
@@ -330,7 +368,7 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
 <body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100">
 <header class="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
   <div class="mx-auto max-w-4xl px-6 py-8">
-    <p class="mb-2 text-sm font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Compte-rendu</p>
+    <p class="mb-2 text-sm font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">{esc(g("report_kicker"))}</p>
     <h1 class="text-3xl font-bold sm:text-4xl">{esc(meta["titre"])}</h1>
     <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500">
       <span>📅 {esc(meta.get("date", ""))}</span>
@@ -340,6 +378,7 @@ def render_html(transcript: list[dict], syn: dict, out_path: str) -> str:
     </div>
     <div class="mt-5 flex flex-wrap gap-2">{part_chips}</div>
     {f'<div class="mt-6 no-print">{audio_block}</div>' if audio_block else ""}
+    {slide_block}
   </div>
 </header>
 <nav class="no-print sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
@@ -368,6 +407,28 @@ function highlightAt(t){{
   if(el){{el.classList.add(...CUR_CLS);el.scrollIntoView({{behavior:'smooth',block:'nearest'}});}}
 }}
 player&&player.addEventListener('timeupdate',()=>highlightAt(player.currentTime));
+
+// Slide-sync: swap the slide panel to whatever slide the current moment is *about*.
+// SLIDESYNC.timeline spans are contiguous and content-ordered (not chronological), so
+// the current slide is simply the last span whose start is <= t — big out-of-order
+// jumps (0→14→7→2→25) just work.
+const SLIDESYNC={slidesync_js};
+const slideImg=document.getElementById('slide');
+const slideLink=document.getElementById('slide-link');
+const slideCap=document.getElementById('slide-cap');
+function syncSlideAt(t){{
+  if(!SLIDESYNC||!slideImg)return;
+  const tl=SLIDESYNC.timeline;if(!tl||!tl.length)return;
+  let cur=0;for(let i=0;i<tl.length;i++){{if(tl[i].t0<=t)cur=i;else break;}}
+  const sp=tl[cur];if(!sp)return;
+  if(String(sp.slide)===slideImg.dataset.idx)return;
+  slideImg.dataset.idx=sp.slide;
+  const src=SLIDESYNC.slides[sp.slide];
+  slideImg.src=src;if(slideLink)slideLink.href=src;
+  if(slideCap)slideCap.textContent='{esc(g("slide"))} '+(sp.slide+1)+' / '+SLIDESYNC.slides.length;
+}}
+player&&SLIDESYNC&&player.addEventListener('timeupdate',()=>syncSlideAt(player.currentTime));
+
 const btns=document.querySelectorAll('.tab-btn'),panels=document.querySelectorAll('.tab-panel');
 btns.forEach(b=>b.addEventListener('click',()=>{{
   btns.forEach(x=>{{x.classList.remove('border-emerald-600','text-emerald-700','dark:text-emerald-400');x.classList.add('border-transparent','text-slate-500');}});

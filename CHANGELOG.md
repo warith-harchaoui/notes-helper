@@ -7,6 +7,49 @@ All notable changes to this project are documented here. Format based on
 ## [Unreleased]
 
 ### Added
+- **Unified i18n (GUI + prompts, fr/en/es) with discovered language.** One catalog at the
+  repo root, `locales/i18n.yaml`, holds every translatable string — HTML report labels
+  under `gui:` and LLM synthesis prompts under `prompts:` — each in `fr`/`en`/`es`. New
+  `notes_helper.i18n` loads it (root catalog first, packaged copy as fallback), with
+  `gui(id, lang)`, `prompt(id, lang)`, and a `resolve_language` policy: the report/GUI
+  language is the **dominant** language, taken from the associated **text** when present
+  (langdetect, majority vote) else from the **audio** majority (LID regions). The HTML
+  report auto-detects its language from the transcript and renders labels + `<html lang>`
+  accordingly (verified fr→French, es→Spanish). Adding a language means editing only the
+  catalog. Spoken language stays auto-detected per turn (whisper "auto").
+- **Optimized web audio — no more giant WAV in the output.** The report player is served
+  small, loudness-normalized **Opus** (~32 kbps mono, primary) + **MP3** (~72 kbps,
+  fallback) instead of the pipeline's ~500 MB 16 kHz WAV. New `notes_helper.webaudio`
+  applies a speech chain (high-pass 80 Hz → optional denoise → EBU R128 loudnorm) via
+  ffmpeg. The pipeline sheds the WAV at the end of `run` (encodes then deletes it), and
+  `render()` reclaims any legacy WAV after encoding — out_dir keeps only the compact audio
+  (a 4 h meeting drops from ~500 MB to tens of MB). Player playback and ASR-input audio are
+  deliberately separate chains.
+- **Slide-sync — the player shows the *right* slide, by content not order.** New
+  `notes_helper.slides`: renders a deck PDF to one PNG per page (`pdf2image`), reads each
+  page's text (`pypdf` text layer, `kreuzberg` OCR for image-only pages), and aligns every
+  transcript utterance to the best-matching slide with a dependency-free TF-IDF cosine.
+  The match has **no chronological assumption**, so a meeting that jumps around a deck
+  (0→14→7→2→25) still shows the slide being discussed; weak matches carry the previous
+  slide forward instead of flickering. Output is `slides/slidesync.json` + the PNGs;
+  `render_html(slide_sync=…)` inlines the timeline (no `fetch`, works from `file://`) and
+  swaps an `<img>` panel on every `timeupdate`. Covered by `tests/test_slides.py`.
+- **Associated-document ingestion for context (`notes_helper.context`).** A slug's folder
+  of attached documents becomes synth context: Markdown/text read directly, PDFs and other
+  rich files extracted with `kreuzberg` (text layer first, OCR on demand). New
+  `--context-dir` on `synth`/`all` aggregates a whole dossier (brief + manuscript) in one
+  pass; media and generated artifacts are skipped. `kreuzberg` added to the `docs` extra.
+  Covered by `tests/test_context.py`.
+- **Transcription confidence (offline, Rust core).** Every `Utterance` (and `Word`)
+  now carries `confidence: Option<f32>` in `[0,1]`. On the offline whole-buffer path,
+  `nh-whisper` computes each whisper segment's confidence as the mean of its content
+  tokens' probabilities (`whisper_full_get_token_prob`, skipping special/timestamp
+  tokens); `nh_core::model::mean_confidence` folds a turn's segments into one
+  duration-weighted score, reused by `nh-run` and both offline pipelines. `nh-run`
+  logs the overall mean and flags low-confidence spans (`⚠️ N%`, threshold `0.6`) in
+  `report.md`. The **online/streaming** path is untouched — confidence stays `None`
+  (unmeasured, never fabricated). `#[serde(default)]` keeps older transcripts loadable.
+  This feeds both the *verifiable report* promise and the context-refinement loop.
 - **Selectable diarization embedder (`DIAR_EMBEDDER`).** New config knob
   (`NOTES_HELPER_DIAR_EMBEDDER`, default `"nemo"`) chooses the speaker-embedding
   backend: `"nemo"` keeps the torch/NeMo TitaNet-large (desktop), `"sherpa"` runs the

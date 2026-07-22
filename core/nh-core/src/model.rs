@@ -265,6 +265,14 @@ pub struct Word {
     pub t1: f64,
     /// The word text.
     pub text: String,
+    /// Model confidence for this word in `[0.0, 1.0]`, when the ASR backend reports
+    /// per-token probabilities: `Some(p)` on the offline whole-buffer path (mean of the
+    /// word's token probabilities), `None` when unmeasured — a streaming/online backend or
+    /// one that does not expose probabilities. `Option` (not a bare `f32`) so *unmeasured*
+    /// is never confused with *measured-and-low*. `#[serde(default)]` keeps older
+    /// transcripts (written before this field existed) loadable.
+    #[serde(default)]
+    pub confidence: Option<f32>,
 }
 
 /// One diarized, transcribed utterance: who spoke, when, and what.
@@ -282,6 +290,41 @@ pub struct Utterance {
     pub words: Vec<Word>,
     /// Detected language (ISO-639-1) when known.
     pub language: Option<String>,
+    /// Aggregate ASR confidence for this utterance in `[0.0, 1.0]`: the mean of its
+    /// content tokens' probabilities from whisper.cpp (`whisper_full_get_token_prob`),
+    /// computed on the **offline** whole-buffer path. `None` on the **online/streaming**
+    /// path — live capture stays fully supported — and for backends without probabilities.
+    /// A low value flags a span worth verifying (the "verifiable report" promise) and
+    /// feeds the context-refinement loop that decides which proper nouns to trust.
+    /// `#[serde(default)]` keeps pre-existing transcripts loadable.
+    #[serde(default)]
+    pub confidence: Option<f32>,
+}
+
+/// Duration-weighted mean of the ASR confidences reported by a turn's sub-utterances.
+///
+/// Transcribing one diarized turn can yield several whisper segments (`parts`), each with
+/// its own [`Utterance::confidence`]. This folds them into a single turn-level score,
+/// weighting each part by its duration so a long, confident span outweighs a short, shaky
+/// one. Parts with no measured confidence (`None`) are skipped; if *none* reported one
+/// (e.g. a streaming backend), the result is `None` — the turn stays honestly *unmeasured*
+/// rather than defaulting to a fabricated number. Kept as the single source of truth so
+/// every offline builder (nh-run and the in-crate pipelines) aggregates identically.
+#[must_use]
+pub fn mean_confidence(parts: &[Utterance]) -> Option<f32> {
+    let mut weighted_sum = 0.0f32;
+    let mut weight_total = 0.0f32;
+    for u in parts {
+        if let Some(c) = u.confidence {
+            // Weight by duration; a degenerate zero-length part still counts a unit so it
+            // is never silently dropped.
+            let d = (u.t1 - u.t0).max(0.0) as f32;
+            let w = if d > 0.0 { d } else { 1.0 };
+            weighted_sum += c * w;
+            weight_total += w;
+        }
+    }
+    (weight_total > 0.0).then(|| weighted_sum / weight_total)
 }
 
 /// A diarized speaker turn: a time span attributed to one speaker, before ASR.

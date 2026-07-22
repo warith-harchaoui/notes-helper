@@ -94,10 +94,20 @@ def _cmd_synth(a: argparse.Namespace) -> None:
 
     tr = json.load(open(os.path.join(a.dir, "transcript.json"), encoding="utf-8"))
     speakers = load_speakers(os.path.join(a.dir, "speaker_mapping.json"), tr)
-    # A --context-file (if readable) takes precedence over inline --context.
-    context = a.context or ""
+    # Build the meeting context from, in order: a folder of associated documents
+    # (--context-dir; PDFs and other rich files are extracted via kreuzberg), an explicit
+    # --context-file, then inline --context. They are concatenated so a slug's whole
+    # dossier (brief + attached manuscript) reaches the synthesis in one string.
+    ctx_parts: list[str] = []
+    if getattr(a, "context_dir", ""):
+        from .context import collect_context
+
+        ctx_parts.append(collect_context(a.context_dir))
     if getattr(a, "context_file", ""):
-        context = open(a.context_file, encoding="utf-8").read()
+        ctx_parts.append(open(a.context_file, encoding="utf-8").read())
+    if a.context:
+        ctx_parts.append(a.context)
+    context = "\n\n".join(p for p in ctx_parts if p and p.strip())
     syn = synthesize(
         tr,
         speakers,
@@ -335,17 +345,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         p.add_argument("--title", default="")
         p.add_argument("--lieu", default="")
         p.add_argument(
-            "--model", default=os.environ.get("NOTES_HELPER_OLLAMA_MODEL", "qwen2.5:32b")
+            "--model", default=os.environ.get("NOTES_HELPER_OLLAMA_MODEL", "gemma3:4b")
         )
         # No default language: None means the report language is discovered from
         # the transcript. Pass an explicit code only to force one.
         p.add_argument("--lang", default=None)
         p.add_argument("--format", default="html")
         p.add_argument("--vault", default="")
-        # Meeting context for synth: inline text or a file (file wins). Used to
-        # bias proper-noun spelling and framing. Ignored by the report handler.
+        # Meeting context for synth: a folder of associated documents (--context-dir,
+        # PDFs extracted via kreuzberg), an explicit text file (--context-file), and/or
+        # inline text (--context). All three are concatenated in that order. Used to bias
+        # proper-noun spelling and framing. Ignored by the report handler.
         p.add_argument("--context", default="")
         p.add_argument("--context-file", default="")
+        p.add_argument("--context-dir", default="")
 
     p = sub.add_parser("run")
     p.add_argument("audio")

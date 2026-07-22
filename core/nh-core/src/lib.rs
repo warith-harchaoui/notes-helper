@@ -22,6 +22,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod blockwise;
 pub mod eot;
 pub mod error;
 pub mod lid;
@@ -35,6 +36,7 @@ pub mod settings;
 
 // Re-export the handful of types callers reach for most, so shells can `use nh_core::…`
 // without knowing the internal module layout.
+pub use blockwise::BlockwiseDiarizer;
 pub use eot::{gate_turns, VoicedSpan};
 pub use error::{CoreError, Result};
 pub use lid::{

@@ -1,0 +1,31 @@
+# nh-run — the real offline end-to-end runner (Le Bench and friends).
+#
+# This is a STANDALONE workspace (note the empty `[workspace]` table below) so it is NOT a
+# member of the core workspace: `cargo test --all` in ../ never builds the heavy whisper.cpp
+# / sherpa-onnx / Ollama features, keeping the core CI fast. Build/run it explicitly from
+# this directory. It path-depends on the core crates with their real engines turned on.
+[package]
+name = "nh-run"
+version = "0.1.0"
+edition = "2021"
+description = "Real offline end-to-end runner: source -> diarize+ASR -> synth -> Report."
+publish = false
+
+# Empty table = this crate is its own workspace root, excluded from ../Cargo.toml.
+[workspace]
+
+[dependencies]
+nh-core = { path = "../nh-core" }
+nh-io = { path = "../nh-io" }
+nh-whisper = { path = "../nh-whisper", features = ["whisper-cpp"] }
+nh-sherpa = { path = "../nh-sherpa", features = ["sherpa-onnx"] }
+nh-synth = { path = "../nh-synth", features = ["ollama"] }
+serde_json = "1"
+# Print the core's `tracing` events (router plan, block-wise diarization progress) so a
+# multi-hour run shows it is advancing. INFO by default, tunable via `RUST_LOG`.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[[bin]]
+name = "nh-run"
+path = "src/main.rs"

@@ -186,12 +186,46 @@ mod real {
             let placeholder = SpeakerId::new("S0");
             let mut utterances = Vec::new();
             for i in 0..segments {
+                // Use the *lossy* reader: whisper.cpp can split a multi-byte UTF-8 codepoint
+                // across a segment boundary, yielding an invalid byte sequence. The strict
+                // reader errors on it and would abort a multi-hour transcription over a single
+                // stray byte; lossy substitutes U+FFFD and keeps going.
                 let text = state
-                    .full_get_segment_text(i)
+                    .full_get_segment_text_lossy(i)
                     .map_err(|e| CoreError::Transcription(format!("segment text: {e}")))?;
                 // whisper timestamps are in centiseconds (10 ms units) → seconds.
                 let t0 = state.full_get_segment_t0(i).unwrap_or(0) as f64 / 100.0;
                 let t1 = state.full_get_segment_t1(i).unwrap_or(0) as f64 / 100.0;
+                // Segment confidence = mean of the *content* tokens' probabilities.
+                // whisper.cpp interleaves special / timestamp tokens (`[_BEG_]`,
+                // `<|1.24|>`, …) with the actual word pieces; their text starts with "[_"
+                // or "<|". Those carry no linguistic content and their (usually high)
+                // probabilities would inflate the mean, so we skip them and average only
+                // real word-piece tokens. `full_get_token_prob` returns each token's
+                // posterior in [0, 1] (whisper-rs `whisper_state`). We leave the value
+                // unmeasured (`None`) rather than inventing a 0 when nothing was scored —
+                // this is the signal the context-refinement loop and the report consume.
+                let confidence = match state.full_n_tokens(i) {
+                    Ok(n_tok) => {
+                        let mut sum = 0.0f32;
+                        let mut kept = 0u32;
+                        for tok in 0..n_tok {
+                            // Lossy for the same reason as the segment text above — a stray
+                            // byte in one token must not sink the whole confidence pass.
+                            let ttext = state.full_get_token_text_lossy(i, tok).unwrap_or_default();
+                            if ttext.starts_with("[_") || ttext.starts_with("<|") {
+                                continue; // special / timestamp marker, not a word piece
+                            }
+                            if let Ok(p) = state.full_get_token_prob(i, tok) {
+                                sum += p;
+                                kept += 1;
+                            }
+                        }
+                        (kept > 0).then(|| sum / kept as f32)
+                    }
+                    // Token count unavailable → confidence honestly unmeasured for this span.
+                    Err(_) => None,
+                };
                 utterances.push(Utterance {
                     t0,
                     t1,
@@ -199,6 +233,7 @@ mod real {
                     text: text.trim().to_string(),
                     words: Vec::new(),
                     language: None,
+                    confidence,
                 });
             }
             Ok(utterances)

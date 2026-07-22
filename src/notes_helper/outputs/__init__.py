@@ -88,6 +88,35 @@ def _load(out_dir: str) -> tuple[list[dict], dict]:
     return tr, syn
 
 
+# Already-compressed web sources, checked first so a re-render reuses them and never needs
+# the big WAV back. (filename, <source> MIME type), best codec first.
+_WEB_AUDIO_EXISTING: tuple[tuple[str, str], ...] = (
+    ("audio.ogg", "audio/ogg; codecs=opus"),
+    ("audio.mp3", "audio/mpeg"),
+)
+# Raw/heavy sources to *encode* from when no compressed audio exists yet. Deliberately not
+# a list we keep around: once encoded, the enormous 16 kHz WAV is deleted (see render()).
+_WEB_AUDIO_RAW: tuple[str, ...] = ("audio_16k.wav", "audio.wav", "audio.m4a", "audio.flac")
+
+
+def _existing_web_sources(out_dir: str) -> list[dict]:
+    """Return already-encoded compressed sources present in *out_dir* (opus/mp3)."""
+    return [
+        {"src": name, "type": mime}
+        for name, mime in _WEB_AUDIO_EXISTING
+        if os.path.isfile(os.path.join(out_dir, name))
+    ]
+
+
+def _web_audio_source(out_dir: str) -> str | None:
+    """Return a raw/heavy source in *out_dir* to encode for the player, or ``None``."""
+    for name in _WEB_AUDIO_RAW:
+        path = os.path.join(out_dir, name)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 def render(out_dir: str, formats: Iterable[str] = ("html",), *, vault_dir: str = "") -> dict:
     """Render the requested output formats from an output directory's JSON artifacts.
 
@@ -140,6 +169,30 @@ def render(out_dir: str, formats: Iterable[str] = ("html",), *, vault_dir: str =
             written["md"] = md_path
 
     if "html" in formats:
+        # Web audio: never serve the raw 16 kHz WAV (hundreds of MB for a long meeting).
+        # Reuse compressed sources if present; otherwise encode a small, loudness-normalized
+        # Opus (+ MP3 fallback) and then DELETE the enormous WAV — the report keeps only the
+        # small audio, so out_dir does not carry the huge working file around.
+        meta = syn.setdefault("meta", {})
+        if not meta.get("audio_sources"):
+            web = _existing_web_sources(out_dir)
+            if not web:
+                src_audio = _web_audio_source(out_dir)
+                if src_audio:
+                    from ..webaudio import encode_web_audio
+
+                    web = encode_web_audio(src_audio, out_dir)
+                    if web and os.path.basename(src_audio) in ("audio_16k.wav", "audio.wav"):
+                        try:
+                            freed = os.path.getsize(src_audio) / 1e6
+                            os.remove(src_audio)
+                            osh.info(f"  web-audio: removed {os.path.basename(src_audio)} "
+                                     f"({freed:.0f} MB reclaimed; superseded by compressed audio)")
+                        except OSError:
+                            pass  # leaving the WAV is wasteful but not fatal
+            if web:
+                meta["audio_sources"] = web
+                meta.pop("audio", None)  # drop any single (possibly WAV) source
         written["html"] = render_html(tr, syn, os.path.join(out_dir, "report.html"))
 
     # Compile every requested document format from the Markdown produced above.

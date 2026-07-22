@@ -159,6 +159,7 @@ mod tests {
                 text: self.0.to_string(),
                 words: Vec::new(),
                 language: None,
+                confidence: None, // fixed-word mock: no probabilities
             }])
         }
     }

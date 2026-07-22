@@ -168,7 +168,10 @@ DIAR_EMBEDDER: str = _resolve("DIAR_EMBEDDER", "nemo")
 # Localhost by default: the "remote" endpoint is only remote if an operator
 # points it elsewhere via config/env — the pipeline stays offline out of the box.
 OLLAMA_URL: str = _resolve("OLLAMA_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL: str = _resolve("OLLAMA_MODEL", "qwen2.5:32b")
+# Default kept light so it runs on a laptop: a 32B model pins ~16 GB and is minutes/chunk
+# on an M-series GPU; gemma3:4b is fast, JSON-reliable and ~4.7 GB. Override with
+# NOTES_HELPER_OLLAMA_MODEL for a heavier model when the hardware allows.
+OLLAMA_MODEL: str = _resolve("OLLAMA_MODEL", "gemma3:4b")
 
 # --- on-device identity store --------------------------------------------- #
 # Voiceprint DB lives under the user's home so identities are per-user and never
