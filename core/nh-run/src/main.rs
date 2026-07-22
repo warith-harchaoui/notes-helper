@@ -10,7 +10,7 @@
 //! NH_WHISPER_MODEL=/path/ggml-base.bin \
 //! NH_SHERPA_SEG=/path/community1-segmentation.onnx \
 //! NH_SHERPA_EMB=/path/nemo_en_titanet_large.onnx \
-//! NH_OLLAMA_MODEL=qwen2.5:3b NH_LANG=français NH_SPEAKERS=2 \
+//! NH_OLLAMA_MODEL=gemma3:4b NH_LANG=français NH_SPEAKERS=2 \
 //! cargo run --release -- <input-audio> <output-dir>
 //! ```
 
@@ -124,7 +124,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let whisper_model = env_or("NH_WHISPER_MODEL", "");
     let seg = env_or("NH_SHERPA_SEG", "");
     let emb = env_or("NH_SHERPA_EMB", "");
-    let ollama_model = env_or("NH_OLLAMA_MODEL", "qwen2.5:3b");
+    // gemma3:4b is the project's sanctioned synth model: fast on M-series, JSON-reliable, and
+    // beefier than the old qwen2.5:3b default. Override with NH_OLLAMA_MODEL=qwen3:8b (the 8B
+    // ceiling) for maximum quality when the transcript warrants it.
+    let ollama_model = env_or("NH_OLLAMA_MODEL", "gemma3:4b");
     let lang = env_or("NH_LANG", "français");
     let session_id = env_or("NH_SESSION_ID", "session");
     let speakers: Option<i32> = std::env::var("NH_SPEAKERS").ok().and_then(|s| s.parse().ok());
