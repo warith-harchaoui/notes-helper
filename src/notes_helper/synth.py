@@ -403,9 +403,210 @@ def _chunks(transcript: list[dict], names: dict, max_chars: int = 6000) -> Itera
 
 
 # Upper bound on how much user context is appended to each system prompt. Large
-# enough to carry a real meeting brief, small enough to leave room for the
-# transcript chunk in a local model's context window.
-_CONTEXT_MAX_CHARS: int = 8000
+# enough to carry a real meeting brief (participants, proper nouns, an attached
+# note), small enough to leave room for the transcript chunk in the model's window.
+# NOTE: a blind cap is the crude move — the right fix for a big brief is to *distil*
+# it against the transcript (keep what the conversation references) rather than cut;
+# that loop is future work. gemma3's 128k window lets us carry a generous slice now.
+_CONTEXT_MAX_CHARS: int = 16000
+
+# Char budget for one reduce call's partial-notes payload. gemma3 handles a 128k
+# context, so we fold far more than the old 24k cut — but a long meeting still
+# overflows a single call, so the reduce is HIERARCHICAL: batch the notes to this
+# budget, fold each batch into an intermediate report, then fold those together.
+_REDUCE_MAX_CHARS: int = 48000
+
+
+def _batch_by_chars(items: list[dict], budget: int) -> list[list[dict]]:
+    """Group ``items`` into batches whose serialized JSON stays within ``budget``.
+
+    Packs as many whole items as fit per batch; an item that alone exceeds the
+    budget still gets its own (later truncated) batch, so nothing is dropped.
+    """
+    batches: list[list[dict]] = []
+    cur: list[dict] = []
+    cur_len = 2  # the enclosing "[]"
+    for it in items:
+        span = len(json.dumps(it, ensure_ascii=False)) + 1
+        if cur and cur_len + span > budget:
+            batches.append(cur)
+            cur, cur_len = [], 2
+        cur.append(it)
+        cur_len += span
+    if cur:
+        batches.append(cur)
+    return batches
+
+
+def _reduce(partials: list[dict], reduce_sys: str, model: str, _depth: int = 0) -> dict:
+    """Fold partial notes into one final report, hierarchically when they overflow.
+
+    Notes that fit one reduce call are folded directly. Otherwise they are split
+    into budget-sized batches, each folded into an intermediate report, and those
+    reports are folded again — so a four-hour meeting reaches the final report
+    without silently dropping most of its notes to a fixed truncation. A depth cap
+    guarantees termination on pathological inputs (fall back to a truncated fold).
+    """
+    blob = json.dumps(partials, ensure_ascii=False)
+    if len(blob) <= _REDUCE_MAX_CHARS or _depth >= 3:
+        payload = blob if len(blob) <= _REDUCE_MAX_CHARS else blob[:_REDUCE_MAX_CHARS]
+        return _json_loads_lax(
+            _ollama(
+                [{"role": "system", "content": reduce_sys}, {"role": "user", "content": payload}],
+                model,
+            )
+        )
+    batches = _batch_by_chars(partials, _REDUCE_MAX_CHARS)
+    intermediates: list[dict] = []
+    for i, batch in enumerate(batches):
+        osh.info(f"  synth reduce (batch {i + 1}/{len(batches)}, depth {_depth})...")
+        part = _json_loads_lax(
+            _ollama(
+                [
+                    {"role": "system", "content": reduce_sys},
+                    {"role": "user", "content": json.dumps(batch, ensure_ascii=False)},
+                ],
+                model,
+            )
+        )
+        if part:
+            intermediates.append(part)
+    if not intermediates:
+        return {}
+    # Fold the intermediate reports together — they are report-shaped but still valid
+    # "notes" to the reducer. Recursion collapses toward a single final report.
+    return _reduce(intermediates, reduce_sys, model, _depth + 1)
+
+
+def distill_context(text: str, model: str, *, budget: int = _CONTEXT_MAX_CHARS, focus: str = "") -> str:
+    """Compress a large reference document into compact, faithful context notes.
+
+    A document that already fits ``budget`` is returned unchanged. A larger one is
+    split into ``budget``-sized chunks, each condensed by its own offline LLM call
+    (keeping proper nouns, definitions, facts, framing; dropping filler), and the
+    summaries are concatenated; if the result still overflows, the pass repeats — so
+    the WHOLE document informs the report through several small calls rather than one
+    truncated blob. Falls back to a plain cut only if the model is unreachable.
+    """
+    text = text.strip()
+    if len(text) <= budget:
+        return text
+    focus_clause = f" en lien avec : {focus}" if focus else ""
+    sys = (
+        "Tu condenses un extrait de document en notes de contexte FIDÈLES et concises "
+        "pour préparer un compte-rendu de réunion" + focus_clause + ". Garde les NOMS "
+        "PROPRES, sigles, définitions et faits importants ; enlève le remplissage. "
+        "N'invente rien. Réponds uniquement par les notes condensées."
+    )
+    chunks = [text[i : i + budget] for i in range(0, len(text), budget)]
+    summaries: list[str] = []
+    for i, ch in enumerate(chunks):
+        osh.info(f"  context: distilling document chunk {i + 1}/{len(chunks)}...")
+        try:
+            s = _ollama(
+                [{"role": "system", "content": sys}, {"role": "user", "content": ch}],
+                model,
+                fmt_json=False,
+            ).strip()
+        except Exception as e:  # noqa: BLE001 - a flaky chunk must not sink the whole doc
+            osh.warning(f"  context: distill chunk {i + 1} failed: {e}")
+            continue
+        if s:
+            summaries.append(s)
+    merged = "\n\n".join(summaries).strip()
+    if not merged:
+        return text[:budget]  # model unavailable → honest fallback to a single cut
+    if len(merged) > budget and len(merged) < len(text):
+        return distill_context(merged, model, budget=budget, focus=focus)
+    return merged[:budget] if len(merged) > budget else merged
+
+
+def _labels_by_talktime(transcript: list[dict]) -> list[str]:
+    """Diarizer ids ordered by total speech, longest first (deterministic tie-break)."""
+    secs: dict[str, float] = {}
+    for u in transcript:
+        secs[u["speaker"]] = secs.get(u["speaker"], 0.0) + max(0.0, u.get("t1", 0) - u.get("t0", 0))
+    return [lbl for lbl, _ in sorted(secs.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
+def _speaker_sample(transcript: list[dict], labels: list[str], per: int = 8, maxlen: int = 220) -> str:
+    """A few representative lines per diarizer id, for name attribution."""
+    by: dict[str, list[str]] = {lbl: [] for lbl in labels}
+    for u in transcript:
+        lbl = u["speaker"]
+        if lbl in by and len(by[lbl]) < per and u.get("text"):
+            by[lbl].append(u["text"].strip()[:maxlen])
+    lines: list[str] = []
+    for lbl in labels:
+        lines.append(f"{lbl}:")
+        lines.extend(f"  - {t}" for t in by[lbl])
+    return "\n".join(lines)
+
+
+def assign_speaker_names(
+    transcript: list[dict], roster: list[str], model: str, language: str | None = None
+) -> dict:
+    """Determine which diarizer id (S0, S1 …) is which named participant.
+
+    The diarizer discovers *how many* voices there are but not *who* they are; the
+    folder's ``notes.yaml`` supplies the roster of names but cannot know, up front,
+    which recorded voice is which person. This bridges the two: from a sample of each
+    id's speech and the roster, the model maps every id to its most likely name. A
+    talk-time heuristic (most-talkative id → first-listed name, by rank) is the
+    fallback when the model is unavailable; an id with no confident match keeps its
+    id (a minor / audience voice). One named person may cover several ids when there
+    is a single speaker.
+
+    Parameters
+    ----------
+    transcript : list of dict
+        Diarized utterances ``{"t0", "t1", "speaker", "text"}``.
+    roster : list of str
+        Participant names from ``notes.yaml`` (order is not an identity claim).
+    model : str
+        Ollama model used for the attribution call.
+    language : str, optional
+        Report language, only to steer the sample interpretation.
+
+    Returns
+    -------
+    dict
+        Map from every diarizer id present to a display name.
+    """
+    labels = _labels_by_talktime(transcript)
+    if not roster:
+        return {lbl: lbl for lbl in labels}
+
+    lang_clause = f"en {language}" if language else "dans la langue de la transcription"
+    sys = (
+        "Tu associes des identifiants de locuteurs (S0, S1, …) à des personnes nommées, "
+        f"d'après des échantillons de leurs propos {lang_clause}. Participants connus : "
+        + ", ".join(roster)
+        + ". Réponds en JSON STRICT {\"S0\": \"Nom\", \"S1\": \"Nom\", ...} : pour chaque "
+        "identifiant, la personne la plus probable parmi les participants, ou l'identifiant "
+        "lui-même si aucune ne correspond (public, voix mineure). Un même participant peut "
+        "couvrir plusieurs identifiants s'il n'y a qu'un seul orateur."
+    )
+    try:
+        mapping = _json_loads_lax(
+            _ollama(
+                [
+                    {"role": "system", "content": sys},
+                    {"role": "user", "content": _speaker_sample(transcript, labels)},
+                ],
+                model,
+            )
+        )
+    except Exception:  # noqa: BLE001 - attribution is best-effort; heuristic covers failure
+        mapping = {}
+
+    out: dict[str, str] = {}
+    for i, lbl in enumerate(labels):
+        name = mapping.get(lbl) if isinstance(mapping.get(lbl), str) else None
+        if not name:
+            name = roster[i] if i < len(roster) else lbl  # rank heuristic, else keep the id
+        out[lbl] = name
+    return out
 
 # The map + reduce system prompts live, fully translated per language, in
 # locales/i18n.yaml under `prompts.map_sys` / `prompts.reduce_sys`. They are read
@@ -534,16 +735,10 @@ def synthesize(
         final = _heuristic(transcript, names)
     else:
         osh.info("  synth reduce...")
-        # Cap the reduce input: even folded notes can exceed the context window on
-        # very long meetings, so we truncate defensively at 24k chars.
-        notes = json.dumps(partials, ensure_ascii=False)[:24000]
+        # Hierarchical fold: the whole meeting's notes reach the report (batched and
+        # re-folded when they overflow one call) instead of being cut at a fixed size.
         try:
-            final = _json_loads_lax(
-                _ollama(
-                    [{"role": "system", "content": reduce_sys}, {"role": "user", "content": notes}],
-                    model,
-                )
-            )
+            final = _reduce(partials, reduce_sys, model)
         except Exception as e:
             osh.warning(f"  synth reduce failed ({e}) -> minimal heuristic synthese")
             final = {}

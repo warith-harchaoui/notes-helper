@@ -387,7 +387,9 @@ def render_html(
 <main class="mx-auto max-w-4xl px-6 py-8">{panels_html}</main>
 <script>
 const player=document.getElementById('player');
-function seek(t){{if(!player)return;player.currentTime=t;player.play();if(player.scrollIntoView)player.scrollIntoView({{behavior:'smooth',block:'start'}});}}
+// A cursor click (a transcript timestamp, a chapter) seeks AND jumps the page to the
+// very top, so the slide panel (or the player, when there are no slides) is in view.
+function seek(t){{if(!player)return;player.currentTime=t;player.play();window.scrollTo({{top:0,behavior:'smooth'}});}}
 document.querySelectorAll('.ts,.chapter').forEach(el=>el.addEventListener('click',()=>seek(parseFloat(el.dataset.t))));
 
 // Time cursor: as the audio plays, highlight the utterance currently being spoken
@@ -404,7 +406,9 @@ function highlightAt(t){{
   if(curUtt>=0&&uttEls[curUtt])uttEls[curUtt].classList.remove(...CUR_CLS);
   curUtt=i;
   const el=uttEls[i];
-  if(el){{el.classList.add(...CUR_CLS);el.scrollIntoView({{behavior:'smooth',block:'nearest'}});}}
+  // Highlight only — never scroll here: dragging the audio player's own slider fires
+  // timeupdate, and the page must NOT move while the user scrubs.
+  if(el){{el.classList.add(...CUR_CLS);}}
 }}
 player&&player.addEventListener('timeupdate',()=>highlightAt(player.currentTime));
 

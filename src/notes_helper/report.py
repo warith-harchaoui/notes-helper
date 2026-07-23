@@ -28,14 +28,22 @@ Pipeline
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import subprocess
 
+import yaml
+
 from . import config
+from .context import extract_document_text
 from .outputs.html import render_html
 from .slides import build_slide_sync
-from .synth import synthesize
+from .synth import assign_speaker_names, distill_context, synthesize
+
+# A folder may carry a small YAML of ground truth (title, date, place, real speaker
+# names, context, which PDF is the slide deck) that sharpens the whole report.
+_NOTES_YAML_NAMES = ("notes.yaml", "notes.yml", "meeting.yaml", "meeting.yml")
 
 # Media containers we accept as the recording; the largest one in the folder wins.
 _AUDIO_EXTS = (
@@ -90,6 +98,102 @@ def _load_context(input_dir: str) -> str:
         with open(path, encoding="utf-8") as fh:
             return fh.read()
     return ""
+
+
+def _load_notes(input_dir: str) -> dict:
+    """Read the folder's ground-truth YAML (``notes.yaml`` …) if present, else ``{}``."""
+    for name in _NOTES_YAML_NAMES:
+        path = os.path.join(input_dir, name)
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fh:
+                return yaml.safe_load(fh) or {}
+    return {}
+
+
+def _as_date_str(value) -> str:
+    """Coerce a YAML date (``datetime.date`` or string) to an ISO string, or ``""``."""
+    if isinstance(value, (datetime.date, datetime.datetime)):
+        return value.isoformat()[:10]
+    return str(value).strip() if value else ""
+
+
+def _norm_roster(spec) -> list[str]:
+    """Normalize the YAML ``speakers`` field to a plain list of participant names.
+
+    Accepts a list of strings (the documented shape) and tolerates a list of
+    ``{name: …}`` dicts. The order carries no identity claim — which recorded voice
+    is which person is *determined* later, not assumed from this list.
+    """
+    out: list[str] = []
+    for item in spec or []:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+        elif isinstance(item, dict) and item.get("name"):
+            out.append(str(item["name"]).strip())
+    return out
+
+
+def _resolve_deck(input_dir: str, notes: dict) -> str | None:
+    """Pick the slide deck PDF: the YAML ``slides:`` filename wins, else auto-detect.
+
+    ``slides: my.pdf`` forces that file (a PDF in this folder) as the deck; leaving the
+    key unset (or empty) falls back to the landscape-PDF heuristic — a portrait document
+    is not a deck, so a folder with only a portrait PDF ends up with no slides.
+    """
+    spec = notes.get("slides")
+    if spec:
+        path = spec if os.path.isabs(spec) else os.path.join(input_dir, spec)
+        return path if os.path.isfile(path) else None
+    return _find_landscape_pdf(input_dir)
+
+
+def _meeting_context(
+    input_dir: str, notes: dict, roster: list[str], model: str, language: str | None
+) -> str:
+    """Assemble the synthesis context, highest-signal first so any cut keeps what matters.
+
+    Order: a header from the YAML (title, date, place, participant roster); then the
+    folder's ``context.md``; then each document in ``context_files`` — extracted and, when
+    large, DISTILLED across several offline LLM passes (chunked, summarised, merged) rather
+    than truncated, so the whole document informs the report; then ``additional_glossary``,
+    which *completes* the context (proper nouns to spell right), never replaces it.
+    """
+    parts: list[str] = []
+
+    header: list[str] = []
+    if notes.get("title"):
+        header.append(f"Réunion : {notes['title']}")
+    if notes.get("date"):
+        header.append(f"Date : {_as_date_str(notes['date'])}")
+    if notes.get("location"):
+        header.append(f"Lieu : {notes['location']}")
+    if roster:
+        header.append("Participants : " + ", ".join(roster))
+    if header:
+        parts.append("\n".join(header))
+
+    md = _load_context(input_dir)
+    if md:
+        parts.append(md)
+
+    focus = str(notes.get("title", ""))
+    for name in notes.get("context_files") or []:
+        path = name if os.path.isabs(name) else os.path.join(input_dir, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            text = extract_document_text(path).strip()
+        except RuntimeError:
+            continue  # a rich doc without its extractor installed — skip, don't fail the run
+        if text:
+            distilled = distill_context(text, model, focus=focus)
+            parts.append(f"## {os.path.basename(path)}\n\n{distilled}")
+
+    extra = notes.get("additional_glossary") or []
+    if extra:
+        parts.append("Termes et noms propres à respecter : " + ", ".join(map(str, extra)))
+
+    return "\n\n".join(p for p in parts if p)
 
 
 def _ensure_transcript(audio: str, output_dir: str) -> list[dict]:
@@ -162,31 +266,49 @@ def build_report(
         output_dir = os.path.join("output", name)
     os.makedirs(output_dir, exist_ok=True)
 
+    # Ground truth the user dropped in the folder (real names, date, place, deck, context).
+    notes = _load_notes(input_dir)
+    title = title or notes.get("title", "") or name
+    if language is None and notes.get("language"):
+        language = str(notes["language"])
     audio = _find_audio(input_dir)
-    context = _load_context(input_dir)
-    deck = _find_landscape_pdf(input_dir)
+    deck = _resolve_deck(input_dir, notes)
 
     # 1) transcript (Rust O(n) diar + ASR) and 2) the player's MP3.
     transcript = _ensure_transcript(audio, output_dir)
     audio_rel = _ensure_mp3(audio, output_dir)
 
-    # Speakers discovered from the transcript; names stay as ids unless the caller enriches them.
+    # Speakers: the diarizer discovered HOW MANY voices; the YAML gives the roster of
+    # NAMES. We determine which id is which person from the conversation itself (the
+    # roster order is not an identity claim). Ids with no confident match keep their id.
+    resolved_model = model or config.OLLAMA_MODEL
+    roster = _norm_roster(notes.get("speakers"))
     labels = sorted({u["speaker"] for u in transcript})
-    speakers = {sp: {"name": sp, "role": ""} for sp in labels}
+    if synth and roster:
+        names = assign_speaker_names(transcript, roster, resolved_model, language)
+    else:
+        names = {lbl: lbl for lbl in labels}
+    speakers = {lbl: {"name": names.get(lbl, lbl), "role": ""} for lbl in labels}
+
+    # Context feeds the synthesis (proper-noun spelling, framing): YAML header + context.md
+    # + distilled context_files + additional_glossary, highest-signal first.
+    context = _meeting_context(input_dir, notes, roster, resolved_model, language) if synth else ""
 
     # 3) synthesis (local LLM) — or empty tabs when disabled.
     if synth:
         syn = synthesize(
             transcript,
             speakers,
-            title=title or name,
-            model=model or config.OLLAMA_MODEL,
+            title=title,
+            date=_as_date_str(notes.get("date")),
+            lieu=str(notes.get("location", "")),
+            model=resolved_model,
             language=language,
             context=context,
         )
     else:
         syn = {
-            "meta": {"titre": title or name},
+            "meta": {"titre": title},
             "speakers": speakers,
             "resume": [],
             "points_cles": [],
@@ -197,8 +319,10 @@ def build_report(
             "citations": [],
         }
     syn["meta"]["audio"] = audio_rel
+    if notes.get("time"):
+        syn["meta"]["horaire"] = str(notes["time"])
 
-    # 4) slides — only for a landscape deck (the sole Le Bench / sev7n difference).
+    # 4) slides — a landscape deck (auto-detected) or the YAML's explicit ``slides:`` file.
     slide_sync = build_slide_sync(deck, transcript, output_dir) if deck else None
 
     # 5) polished interactive report.

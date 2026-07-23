@@ -93,58 +93,94 @@ prompts:
   # Map step: extract faithful partial notes from one transcript chunk.
   map_sys:
     fr: >-
-      Tu es un secrétaire de séance rigoureux. À partir d'un extrait de
-      transcription horodatée, extrais fidèlement, SANS inventer, {lang_clause}.
-      Renvoie un JSON: {"points":[...], "decisions":[{"decision":..,"contexte":..,"t":sec}],
+      Tu es un secrétaire de séance rigoureux et EXHAUSTIF. À partir d'un extrait
+      de transcription horodatée (chaque ligne = « [1979s] Nom: propos »), extrais
+      fidèlement, SANS rien inventer, {lang_clause}. Relève TOUS les sujets abordés,
+      même en passant. Renvoie un JSON:
+      {"points":[...], "decisions":[{"decision":..,"contexte":..,"t":sec}],
       "actions":[{"action":..,"responsable":..,"echeance":..}],
-      "citations":[{"speaker":..,"texte":..,"t":sec}], "themes":[..]}.
-      Les lignes sont préfixées par leur horodatage en secondes, ex. [1979s];
-      recopie CET entier (en secondes) tel quel dans le champ t.
-      Chaque décision/citation garde le timestamp (secondes) d'où elle vient.
+      "citations":[{"speaker":<nom du locuteur>,"texte":<mot pour mot>,"t":sec}],
+      "themes":[<sujet précis>, ...]}.
+      Recopie l'entier des secondes tel quel dans t. Dans "speaker", mets le NOM
+      affiché sur la ligne. Une citation = une phrase VRAIMENT marquante recopiée
+      mot pour mot (jamais une banalité, un « oui », une hésitation).
     en: >-
-      You are a meticulous minute-taker. From an excerpt of timestamped
-      transcript, faithfully extract, WITHOUT inventing anything, {lang_clause}.
-      Return JSON: {"points":[...], "decisions":[{"decision":..,"contexte":..,"t":sec}],
+      You are a meticulous, EXHAUSTIVE minute-taker. From an excerpt of timestamped
+      transcript (each line = "[1979s] Name: words"), faithfully extract, WITHOUT
+      inventing anything, {lang_clause}. Capture EVERY topic touched on, even in
+      passing. Return JSON:
+      {"points":[...], "decisions":[{"decision":..,"contexte":..,"t":sec}],
       "actions":[{"action":..,"responsable":..,"echeance":..}],
-      "citations":[{"speaker":..,"texte":..,"t":sec}], "themes":[..]}.
-      Lines are prefixed with their timestamp in seconds, e.g. [1979s];
-      copy THAT integer (in seconds) verbatim into the t field.
-      Every decision/quote keeps the timestamp (seconds) it came from.
+      "citations":[{"speaker":<speaker name>,"texte":<verbatim>,"t":sec}],
+      "themes":[<precise topic>, ...]}.
+      Copy the integer seconds verbatim into t. In "speaker", put the NAME shown on
+      the line. A quote = one genuinely striking sentence copied word-for-word
+      (never filler, a "yeah", or a hesitation).
     es: >-
-      Eres un secretario de actas riguroso. A partir de un extracto de
-      transcripción con marcas de tiempo, extrae fielmente, SIN inventar nada, {lang_clause}.
-      Devuelve un JSON: {"points":[...], "decisions":[{"decision":..,"contexte":..,"t":sec}],
+      Eres un secretario de actas riguroso y EXHAUSTIVO. A partir de un extracto de
+      transcripción con marcas de tiempo (cada línea = "[1979s] Nombre: palabras"),
+      extrae fielmente, SIN inventar nada, {lang_clause}. Capta TODOS los temas
+      tratados, aunque sea de pasada. Devuelve un JSON:
+      {"points":[...], "decisions":[{"decision":..,"contexte":..,"t":sec}],
       "actions":[{"action":..,"responsable":..,"echeance":..}],
-      "citations":[{"speaker":..,"texte":..,"t":sec}], "themes":[..]}.
-      Las líneas van precedidas por su marca de tiempo en segundos, p. ej. [1979s];
-      copia ESE entero (en segundos) tal cual en el campo t.
-      Cada decisión/cita conserva la marca de tiempo (segundos) de donde proviene.
+      "citations":[{"speaker":<nombre>,"texte":<literal>,"t":sec}],
+      "themes":[<tema preciso>, ...]}.
+      Copia el entero de segundos tal cual en t. En "speaker" pon el NOMBRE de la
+      línea. Una cita = una frase realmente notable copiada literalmente (nunca
+      relleno ni una vacilación).
   # Reduce step: fold partial notes into the final report with a fixed key set.
   reduce_sys:
     fr: >-
-      Tu es un rédacteur de compte-rendu. À partir de notes partielles,
-      produis le compte-rendu final {lang_clause}, JSON strict avec EXACTEMENT ces clés:
-      "resume" (liste de paragraphes), "points_cles" (liste),
-      "decisions" (liste {decision, contexte}),
-      "actions" (liste {action, responsable, echeance}),
-      "chapitres" (liste {t, titre, resume} — t en secondes),
-      "themes" (liste {theme, points[]}),
-      "citations" (liste {speaker, texte, t}). Fidèle aux notes, rien d'inventé.
+      Tu es un rédacteur de compte-rendu rigoureux. À partir de notes partielles
+      couvrant TOUT l'enregistrement, produis le compte-rendu final {lang_clause},
+      en JSON strict avec EXACTEMENT ces clés. Utilise les VRAIS NOMS des
+      participants partout ; fidèle aux notes, rien d'inventé.
+      "resume": 2 à 4 paragraphes denses qui racontent l'échange du début à la fin.
+      "points_cles": liste EXHAUSTIVE des points importants.
+      "decisions": liste {decision, contexte}.
+      "actions": liste {action, responsable, echeance}.
+      "chapitres": DÉCOUPE toute la conversation en chapitres chronologiques
+      cohérents (du début à la fin, vise ~1 par 5–10 min), chacun
+      {t: seconde de début, titre: titre COURT et précis (jamais une phrase
+      recopiée), resume: 1–2 phrases}. Trie par t croissant, couvre l'intégralité.
+      "themes": SOIS EXHAUSTIF — liste TOUS les sujets réellement discutés (vise 8
+      à 15 selon la richesse), chacun {theme, points:[sous-points]}. Ne fusionne
+      pas des sujets distincts, n'en oublie aucun.
+      "citations": seulement quelques citations VRAIMENT marquantes, mot pour mot,
+      chacune {speaker: NOM du locuteur, texte, t}. Écarte les banalités.
     en: >-
-      You are a report writer. From partial notes, produce the final report
-      {lang_clause}, strict JSON with EXACTLY these keys:
-      "resume" (list of paragraphs), "points_cles" (list),
-      "decisions" (list {decision, contexte}),
-      "actions" (list {action, responsable, echeance}),
-      "chapitres" (list {t, titre, resume} — t in seconds),
-      "themes" (list {theme, points[]}),
-      "citations" (list {speaker, texte, t}). Faithful to the notes, nothing invented.
+      You are a rigorous report writer. From partial notes covering the WHOLE
+      recording, produce the final report {lang_clause}, strict JSON with EXACTLY
+      these keys. Use the participants' REAL NAMES throughout; faithful to the
+      notes, nothing invented.
+      "resume": 2 to 4 dense paragraphs telling the exchange from start to finish.
+      "points_cles": EXHAUSTIVE list of the important points.
+      "decisions": list {decision, contexte}.
+      "actions": list {action, responsable, echeance}.
+      "chapitres": SEGMENT the whole conversation into coherent chronological
+      chapters (start to end, aim ~1 per 5–10 min), each {t: start second, titre:
+      SHORT precise title (never a copied sentence), resume: 1–2 sentences}. Sort
+      by ascending t, cover the entirety.
+      "themes": BE EXHAUSTIVE — list EVERY topic actually discussed (aim 8 to 15
+      depending on richness), each {theme, points:[sub-points]}. Do not merge
+      distinct topics, omit none.
+      "citations": only a few genuinely striking quotes, word-for-word, each
+      {speaker: speaker NAME, texte, t}. Drop the filler.
     es: >-
-      Eres un redactor de actas. A partir de notas parciales, produce el acta
-      final {lang_clause}, JSON estricto con EXACTAMENTE estas claves:
-      "resume" (lista de párrafos), "points_cles" (lista),
-      "decisions" (lista {decision, contexte}),
-      "actions" (lista {action, responsable, echeance}),
-      "chapitres" (lista {t, titre, resume} — t en segundos),
-      "themes" (lista {theme, points[]}),
-      "citations" (lista {speaker, texte, t}). Fiel a las notas, nada inventado.
+      Eres un redactor de actas riguroso. A partir de notas parciales que cubren
+      TODA la grabación, produce el acta final {lang_clause}, JSON estricto con
+      EXACTAMENTE estas claves. Usa los NOMBRES REALES de los participantes en todo;
+      fiel a las notas, nada inventado.
+      "resume": 2 a 4 párrafos densos que cuentan el intercambio de principio a fin.
+      "points_cles": lista EXHAUSTIVA de los puntos importantes.
+      "decisions": lista {decision, contexte}.
+      "actions": lista {action, responsable, echeance}.
+      "chapitres": SEGMENTA toda la conversación en capítulos cronológicos
+      coherentes (de principio a fin, ~1 por 5–10 min), cada uno {t: segundo de
+      inicio, titre: título CORTO y preciso (nunca una frase copiada), resume: 1–2
+      frases}. Ordena por t ascendente, cubre la totalidad.
+      "themes": SÉ EXHAUSTIVO — lista TODOS los temas realmente discutidos (apunta a
+      8–15 según la riqueza), cada uno {theme, points:[subpuntos]}. No fusiones
+      temas distintos, no omitas ninguno.
+      "citations": solo unas pocas citas realmente notables, literales, cada una
+      {speaker: NOMBRE, texte, t}. Descarta el relleno.
