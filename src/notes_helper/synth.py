@@ -168,6 +168,36 @@ def _json_loads_lax(s: str) -> dict:
     return {}
 
 
+# How many times to re-ask the model for a JSON object before giving up on a call.
+_OLLAMA_OBJ_RETRIES: int = 5
+
+
+def _ollama_obj(messages: list[dict], model: str, retries: int = _OLLAMA_OBJ_RETRIES) -> dict:
+    """Call the model for a JSON object, tolerating small-model flakiness.
+
+    Two hard-won details make the local synthesis reliable on gemma3-class models:
+
+    - **``format=json`` first, free-form fallback.** Grammar-constrained decoding is
+      fast and usually clean, but on a complex schema a small model intermittently
+      emits an empty ``{}``; asking instead for free-form text and parsing leniently
+      (:func:`_json_loads_lax`) is far more reliable. So the first attempt is JSON-mode
+      (fast path); every retry drops the constraint (reliable path).
+    - **Retry on empty.** A single call occasionally comes back empty either way, so we
+      re-ask a few times; the odds of every attempt failing become negligible.
+
+    Returns ``{}`` only if every attempt came back empty or unparseable, which the
+    callers already treat as "this chunk contributed nothing".
+    """
+    for attempt in range(max(1, retries)):
+        try:
+            obj = _json_loads_lax(_ollama(messages, model, fmt_json=(attempt == 0)))
+        except Exception:  # noqa: BLE001 - transport hiccup: retry, then degrade to {}
+            obj = {}
+        if obj:
+            return obj
+    return {}
+
+
 # --- schema normalisation -------------------------------------------------- #
 # The synthesis is produced by a local LLM constrained to a JSON schema, but
 # small models drift: a field the renderers expect as a string arrives as a
@@ -424,14 +454,22 @@ def _chunks(transcript: list[dict], names: dict, max_chars: int = 6000) -> Itera
 # note), small enough to leave room for the transcript chunk in the model's window.
 # NOTE: a blind cap is the crude move — the right fix for a big brief is to *distil*
 # it against the transcript (keep what the conversation references) rather than cut;
-# that loop is future work. gemma3's 128k window lets us carry a generous slice now.
-_CONTEXT_MAX_CHARS: int = 16000
+# `distill_context` compresses documents to this budget. Kept compact on purpose: it is
+# appended to EVERY map call, and a large context both slows each call and makes a small
+# model far likelier to return an empty object — 6k carries the proper nouns and framing
+# that grounding needs without destabilizing the map step.
+_CONTEXT_MAX_CHARS: int = 6000
 
 # Char budget for one reduce call's partial-notes payload. gemma3 handles a 128k
 # context, so we fold far more than the old 24k cut — but a long meeting still
 # overflows a single call, so the reduce is HIERARCHICAL: batch the notes to this
 # budget, fold each batch into an intermediate report, then fold those together.
 _REDUCE_MAX_CHARS: int = 48000
+
+# How much source text one distillation call reads at a time. Large (the model's window is
+# generous), so a long document is covered in a handful of calls, each summarised down to the
+# compact context budget — far fewer round-trips than reading at the small output budget.
+_DISTILL_READ_CHARS: int = 24000
 
 
 def _batch_by_chars(items: list[dict], budget: int) -> list[list[dict]]:
@@ -467,24 +505,20 @@ def _reduce(partials: list[dict], reduce_sys: str, model: str, _depth: int = 0) 
     blob = json.dumps(partials, ensure_ascii=False)
     if len(blob) <= _REDUCE_MAX_CHARS or _depth >= 3:
         payload = blob if len(blob) <= _REDUCE_MAX_CHARS else blob[:_REDUCE_MAX_CHARS]
-        return _json_loads_lax(
-            _ollama(
-                [{"role": "system", "content": reduce_sys}, {"role": "user", "content": payload}],
-                model,
-            )
+        return _ollama_obj(
+            [{"role": "system", "content": reduce_sys}, {"role": "user", "content": payload}],
+            model,
         )
     batches = _batch_by_chars(partials, _REDUCE_MAX_CHARS)
     intermediates: list[dict] = []
     for i, batch in enumerate(batches):
         osh.info(f"  synth reduce (batch {i + 1}/{len(batches)}, depth {_depth})...")
-        part = _json_loads_lax(
-            _ollama(
-                [
-                    {"role": "system", "content": reduce_sys},
-                    {"role": "user", "content": json.dumps(batch, ensure_ascii=False)},
-                ],
-                model,
-            )
+        part = _ollama_obj(
+            [
+                {"role": "system", "content": reduce_sys},
+                {"role": "user", "content": json.dumps(batch, ensure_ascii=False)},
+            ],
+            model,
         )
         if part:
             intermediates.append(part)
@@ -515,7 +549,10 @@ def distill_context(text: str, model: str, *, budget: int = _CONTEXT_MAX_CHARS, 
         "PROPRES, sigles, définitions et faits importants ; enlève le remplissage. "
         "N'invente rien. Réponds uniquement par les notes condensées."
     )
-    chunks = [text[i : i + budget] for i in range(0, len(text), budget)]
+    # Read large chunks (the model's window is generous) and summarise each down small — far
+    # fewer calls than reading at the tiny output budget. The whole document is still covered.
+    read = max(budget, _DISTILL_READ_CHARS)
+    chunks = [text[i : i + read] for i in range(0, len(text), read)]
     summaries: list[str] = []
     for i, ch in enumerate(chunks):
         osh.info(f"  context: distilling document chunk {i + 1}/{len(chunks)}...")
@@ -604,18 +641,13 @@ def assign_speaker_names(
         "lui-même si aucune ne correspond (public, voix mineure). Un même participant peut "
         "couvrir plusieurs identifiants s'il n'y a qu'un seul orateur."
     )
-    try:
-        mapping = _json_loads_lax(
-            _ollama(
-                [
-                    {"role": "system", "content": sys},
-                    {"role": "user", "content": _speaker_sample(transcript, labels)},
-                ],
-                model,
-            )
-        )
-    except Exception:  # noqa: BLE001 - attribution is best-effort; heuristic covers failure
-        mapping = {}
+    mapping = _ollama_obj(
+        [
+            {"role": "system", "content": sys},
+            {"role": "user", "content": _speaker_sample(transcript, labels)},
+        ],
+        model,
+    )
 
     out: dict[str, str] = {}
     for i, lbl in enumerate(labels):
@@ -710,8 +742,11 @@ def synthesize(
     # language: when the caller passes none, the model is told to write in the
     # transcript's own language — the report language is discovered, never assumed.
     lang_clause = f"en {language}" if language else "dans la langue d'origine de la transcription"
+    # Context grounds the MAP step (per-chunk proper-noun spelling / framing). The reduce
+    # only folds already-grounded partial notes, so it does NOT carry the context — piling a
+    # large context onto the reduce made a small model far likelier to return an empty object.
     map_sys = _i18n.prompt("map_sys").replace("{lang_clause}", lang_clause) + ctx_block
-    reduce_sys = _i18n.prompt("reduce_sys").replace("{lang_clause}", lang_clause) + ctx_block
+    reduce_sys = _i18n.prompt("reduce_sys").replace("{lang_clause}", lang_clause)
     duree = _hhmmss(transcript[-1]["t1"]) if transcript else "0:00:00"
     meta = {
         "titre": title or "Compte-rendu",
@@ -732,14 +767,9 @@ def synthesize(
     chunks = list(_chunks(transcript, names))
     for i, chunk in enumerate(chunks):
         osh.info(f"  synth map {i + 1}/{len(chunks)}...")
-        try:
-            c = _ollama(
-                [{"role": "system", "content": map_sys}, {"role": "user", "content": chunk}], model
-            )
-        except Exception as e:
-            osh.warning(f"  synth map {i + 1} failed: {e}")
-            continue
-        part = _json_loads_lax(c)  # never raises; {} when unparseable
+        part = _ollama_obj(
+            [{"role": "system", "content": map_sys}, {"role": "user", "content": chunk}], model
+        )  # free-text + lenient parse + retry; {} only if every attempt was empty
         if part:
             map_ok += 1
         partials.append(part)
