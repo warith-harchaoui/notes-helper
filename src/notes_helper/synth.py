@@ -802,6 +802,11 @@ def synthesize(
     # "the LLM is unreachable" (all chunks failed) further down.
     partials: list[dict] = []
     map_ok = 0
+    # Chapters are built HERE, not in the reduce: each map chunk is a contiguous time window,
+    # so its per-chunk "chapitre" title anchored at the chunk's first timestamp yields reliable
+    # chronological chapters covering the whole meeting. A small model asked to *invent* chapter
+    # boundaries from scattered aggregated notes at reduce time simply returns none.
+    chapters: list[dict] = []
     chunks = list(_chunks(transcript, names))
     for i, chunk in enumerate(chunks):
         osh.info(f"  synth map {i + 1}/{len(chunks)}...")
@@ -810,6 +815,20 @@ def synthesize(
         )  # free-text + lenient parse + retry; {} only if every attempt was empty
         if part:
             map_ok += 1
+            title = part.get("chapitre")
+            if isinstance(title, str) and title.strip():
+                start = re.match(r"\s*\[(\d+)s\]", chunk)
+                full = title.strip()
+                # Some models return a whole sentence instead of a heading — keep a short
+                # bold title and demote the rest to the muted one-line summary.
+                short = full if len(full) <= 60 else full[:60].rsplit(" ", 1)[0] + "…"
+                chapters.append(
+                    {
+                        "t": int(start.group(1)) if start else 0,
+                        "titre": short,
+                        "resume": full if full != short else "",
+                    }
+                )
         partials.append(part)
 
     if map_ok == 0:
@@ -831,6 +850,10 @@ def synthesize(
             # Reduce came back empty/unreachable but we do have per-chunk notes;
             # the heuristic at least preserves structure and timestamps.
             final = _heuristic(transcript, names)
+        elif chapters:
+            # Prefer the chronological chapters built from the map windows over whatever the
+            # reduce produced (usually nothing). Sorted by time; the render seeks to each.
+            final["chapitres"] = sorted(chapters, key=lambda c: c["t"])
 
     # Coerce the LLM's (or heuristic's) raw output into the exact schema the
     # renderers rely on — small local models drift on field shapes.
