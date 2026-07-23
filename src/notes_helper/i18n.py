@@ -28,7 +28,8 @@ from __future__ import annotations
 import functools
 import os
 from collections import Counter
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import yaml
 
@@ -115,6 +116,40 @@ def to_supported(lang: str | None) -> str:
         return "en"
     base = lang.split("-")[0].lower()
     return base if base in SUPPORTED_LANGS else "en"
+
+
+def format_date(value: Any, lang: str) -> str:
+    """Render a date as a human string in *lang* — never the raw ISO ``yyyy-mm-dd``.
+
+    ``value`` may be a ``datetime.date``/``datetime`` or a string (typically the ISO
+    ``2026-07-21`` we store internally). The output uses the locale's long form, e.g.
+    ``21 juillet 2026`` (fr), ``July 21, 2026`` (en), ``21 de julio de 2026`` (es).
+    Anything we cannot parse is returned unchanged, so a free-form date the user typed
+    (``"printemps 2026"``) survives untouched.
+    """
+    import datetime as _dt
+
+    if value is None or value == "":
+        return ""
+    date_obj: _dt.date | None = None
+    if isinstance(value, _dt.datetime):
+        date_obj = value.date()
+    elif isinstance(value, _dt.date):
+        date_obj = value
+    else:
+        text = str(value).strip()
+        try:
+            date_obj = _dt.date.fromisoformat(text[:10])
+        except ValueError:
+            return text  # not an ISO date — leave the user's wording as-is
+    try:
+        from babel.dates import format_date as _babel_format_date
+
+        return _babel_format_date(date_obj, format="long", locale=to_supported(lang))
+    except Exception:
+        # babel absent or locale unknown: a readable, language-neutral fallback that is
+        # still not yyyy-mm-dd.
+        return date_obj.strftime("%d %B %Y")
 
 
 def detect_lang(text: str) -> str | None:

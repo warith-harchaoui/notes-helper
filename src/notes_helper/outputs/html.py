@@ -371,7 +371,7 @@ def render_html(
     <p class="mb-2 text-sm font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">{esc(g("report_kicker"))}</p>
     <h1 class="text-3xl font-bold sm:text-4xl">{esc(meta["titre"])}</h1>
     <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500">
-      <span>📅 {esc(meta.get("date", ""))}</span>
+      <span>📅 {esc(_i18n.format_date(meta.get("date", ""), lang))}</span>
       <span>🕘 {esc(meta.get("horaire", ""))}</span>
       <span>📍 {esc(meta.get("lieu", ""))}</span>
       <span>⏱️ {esc(meta.get("duree", ""))}</span>

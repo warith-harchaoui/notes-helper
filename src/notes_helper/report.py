@@ -235,6 +235,7 @@ def build_report(
     model: str = "",
     language: str | None = None,
     synth: bool = True,
+    reuse_synth: bool = False,
 ) -> str:
     """Build ``<output_dir>/index.html`` from the recording (and slides) in ``input_dir``.
 
@@ -254,6 +255,12 @@ def build_report(
     synth : bool, optional
         Run the local synthesis. ``False`` ships the report with empty summary tabs (useful
         when the local LLM is unavailable); the transcript, player and slides still stand.
+    reuse_synth : bool, optional
+        Skip the local LLM and reload the previous synthesis from ``synthese.json`` (also
+        enabled by the ``NH_REUSE_SYNTH`` env var). This is the *render-only* path: a
+        presentational change (labels, date format, layout) or an edited ``notes.yaml``
+        header re-renders in seconds instead of re-running the model. Falls back to a full
+        synthesis when no ``synthese.json`` exists yet.
 
     Returns
     -------
@@ -282,45 +289,64 @@ def build_report(
     # NAMES. We determine which id is which person from the conversation itself (the
     # roster order is not an identity claim). Ids with no confident match keep their id.
     resolved_model = model or config.OLLAMA_MODEL
-    roster = _norm_roster(notes.get("speakers"))
     labels = sorted({u["speaker"] for u in transcript})
-    if synth and roster:
-        names = assign_speaker_names(transcript, roster, resolved_model, language)
-    else:
-        names = {lbl: lbl for lbl in labels}
-    speakers = {lbl: {"name": names.get(lbl, lbl), "role": ""} for lbl in labels}
 
-    # Context feeds the synthesis (proper-noun spelling, framing): YAML header + context.md
-    # + distilled context_files + additional_glossary, highest-signal first.
-    context = _meeting_context(input_dir, notes, roster, resolved_model, language) if synth else ""
-
-    # 3) synthesis (local LLM) — or empty tabs when disabled.
-    if synth:
-        syn = synthesize(
-            transcript,
-            speakers,
-            title=title,
-            date=_as_date_str(notes.get("date")),
-            lieu=str(notes.get("location", "")),
-            model=resolved_model,
-            language=language,
-            context=context,
-        )
+    # 3) synthesis (local LLM) — reused from disk, freshly computed, or empty tabs.
+    synth_path = os.path.join(output_dir, "synthese.json")
+    reuse = (reuse_synth or bool(os.environ.get("NH_REUSE_SYNTH"))) and os.path.exists(synth_path)
+    if reuse:
+        # Render-only: reload the saved synthesis, no LLM. Presentational changes and
+        # notes.yaml header edits re-render in seconds this way.
+        with open(synth_path, encoding="utf-8") as fh:
+            syn = json.load(fh)
     else:
-        syn = {
-            "meta": {"titre": title},
-            "speakers": speakers,
-            "resume": [],
-            "points_cles": [],
-            "decisions": [],
-            "actions": [],
-            "chapitres": [],
-            "themes": [],
-            "citations": [],
-        }
-    syn["meta"]["audio"] = audio_rel
+        roster = _norm_roster(notes.get("speakers"))
+        if synth and roster:
+            names = assign_speaker_names(transcript, roster, resolved_model, language)
+        else:
+            names = {lbl: lbl for lbl in labels}
+        speakers = {lbl: {"name": names.get(lbl, lbl), "role": ""} for lbl in labels}
+        # Context feeds the synthesis (proper-noun spelling, framing): YAML header +
+        # context.md + distilled context_files + additional_glossary, highest-signal first.
+        context = _meeting_context(input_dir, notes, roster, resolved_model, language) if synth else ""
+        if synth:
+            syn = synthesize(
+                transcript,
+                speakers,
+                title=title,
+                date=_as_date_str(notes.get("date")),
+                lieu=str(notes.get("location", "")),
+                model=resolved_model,
+                language=language,
+                context=context,
+            )
+        else:
+            syn = {
+                "meta": {"titre": title},
+                "speakers": speakers,
+                "resume": [],
+                "points_cles": [],
+                "decisions": [],
+                "actions": [],
+                "chapitres": [],
+                "themes": [],
+                "citations": [],
+            }
+
+    # Header fields are ground truth from notes.yaml, refreshed on every render (including
+    # render-only) so an edited title/date/place/time shows without re-running the model.
+    # The date is stored ISO here; the renderer localizes it for display.
+    meta = syn.setdefault("meta", {})
+    meta["titre"] = title
+    meta["date"] = _as_date_str(notes.get("date"))
+    meta["lieu"] = str(notes.get("location", ""))
+    meta["audio"] = audio_rel
     if notes.get("time"):
-        syn["meta"]["horaire"] = str(notes["time"])
+        meta["horaire"] = str(notes["time"])
+
+    # Persist the synthesis so the next build can reuse it (render-only, no LLM).
+    with open(synth_path, "w", encoding="utf-8") as fh:
+        json.dump(syn, fh, ensure_ascii=False, indent=2)
 
     # 4) slides — a landscape deck (auto-detected) or the YAML's explicit ``slides:`` file.
     slide_sync = build_slide_sync(deck, transcript, output_dir) if deck else None

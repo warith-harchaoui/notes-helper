@@ -113,8 +113,13 @@ def test_synthesize_falls_back_when_llm_unreachable(monkeypatch: pytest.MonkeyPa
     assert _HEURISTIC_MARK in " ".join(out["resume"])
 
 
-def test_context_is_injected_into_map_and_reduce_prompts(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A caller-supplied ``context`` reaches the system prompt of both LLM steps."""
+def test_context_is_injected_into_map_only_not_reduce(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Context reaches the MAP prompt only; the reduce folds already-anchored partials.
+
+    Feeding the (potentially large) context into the reduce step destabilised it — the
+    reduce sees per-window partials that already carry the context's framing, so a second
+    injection only added noise. It is deliberately map-only.
+    """
     marker = "GlassPop Oculomics Florent Costantini"
     seen = {"map": False, "reduce": False}
 
@@ -141,7 +146,7 @@ def test_context_is_injected_into_map_and_reduce_prompts(monkeypatch: pytest.Mon
     )
 
     assert seen["map"], "context should be appended to the map system prompt"
-    assert seen["reduce"], "context should be appended to the reduce system prompt"
+    assert not seen["reduce"], "context must NOT be appended to the reduce system prompt"
 
 
 def test_empty_context_leaves_prompts_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:

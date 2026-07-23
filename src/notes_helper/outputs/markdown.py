@@ -34,6 +34,7 @@ Warith HARCHAOUI — https://linkedin.com/in/warith-harchaoui
 
 from __future__ import annotations
 
+from .. import i18n as _i18n
 from ._text import as_text
 from ._timefmt import seconds as _seconds
 
@@ -109,8 +110,13 @@ def render_markdown(transcript: list[dict], syn: dict, *, include_transcript: bo
     L.append(f"# {meta.get('titre', 'Compte-rendu')}\n")
     # Metadata line: build all bits, then drop the ones whose value is empty or a
     # placeholder dash so we never render "Lieu : —" for meetings with no place.
+    # Report language is discovered from the transcript (majority vote), same as the HTML
+    # renderer, so the localized date matches. An explicit meta["lang"] wins if set.
+    lang = meta.get("lang") or _i18n.resolve_language(
+        texts=[u.get("text", "") for u in transcript[:300] if u.get("text")]
+    )
     bits = [
-        f"**Date** : {meta.get('date', '')}",
+        f"**Date** : {_i18n.format_date(meta.get('date', ''), lang)}",
         f"**Lieu** : {meta.get('lieu', '') or '—'}",
         f"**Durée** : {meta.get('duree', '')}",
     ]
