@@ -5,6 +5,7 @@ Module summary
 Exposes the ``notes-helper`` CLI, an argparse-based dispatcher over the local-first
 audio-to-report pipeline. Subcommands::
 
+    notes-helper build <name>                 input/<name>/ -> output/<name>/ (notes.yaml-driven)
     notes-helper run <audio> --out DIR        audio -> transcript (+ diarization + identity)
     notes-helper synth <DIR>                  transcript -> synthese.json (local Ollama)
     notes-helper report <DIR> --format ...    render html / md / docx / pdf / pptx / vault
@@ -143,6 +144,76 @@ def _cmd_report(a: argparse.Namespace) -> None:
     written = render(a.dir, formats, vault_dir=a.vault or "")
     for k, v in written.items():
         print(f"  {k:6s} -> {v}")  # user-facing result: format -> path
+
+
+def _find_repo_root() -> str:
+    """Locate the project root (the dir holding ``core/nh-run``) from the cwd upward.
+
+    Falls back to the cwd; explicit ``NH_*`` env overrides still win regardless.
+    """
+    d = os.getcwd()
+    while True:
+        if os.path.isdir(os.path.join(d, "core", "nh-run")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return os.getcwd()
+        d = parent
+
+
+def _setup_nh_run_env() -> None:
+    """Point ``nh-run`` at the repo's binary + models so ``build`` needs no env wiring.
+
+    Fills only what is unset, so an explicit ``NH_*`` (or the diarization-engines bundle /
+    ``VH_SHERPA_*``) override always wins. This is the streamlining: everything the Rust
+    transcriber needs is resolved here instead of in per-run shell scripts.
+    """
+    from . import config
+
+    root = _find_repo_root()
+    binary = os.path.join(root, "core", "nh-run", "target", "release", "nh-run")
+    os.environ.setdefault("NH_RUN_BIN", binary)
+    os.environ.setdefault("DYLD_LIBRARY_PATH", os.path.dirname(binary))
+    if "NH_WHISPER_MODEL" not in os.environ:
+        ggml = os.path.join(root, "apps", "Models", f"ggml-{config.WHISPER_MODEL}.bin")
+        if os.path.isfile(ggml):
+            os.environ["NH_WHISPER_MODEL"] = ggml
+    if "NH_SHERPA_SEG" not in os.environ or "NH_SHERPA_EMB" not in os.environ:
+        try:
+            from vocal_helper.diar import _resolve_sherpa_models
+
+            seg, emb = _resolve_sherpa_models()
+            os.environ.setdefault("NH_SHERPA_SEG", seg)
+            os.environ.setdefault("NH_SHERPA_EMB", emb)
+        except Exception:
+            pass  # left unset → nh-run reports the missing model with a clear path
+
+
+def _cmd_build(a: argparse.Namespace) -> None:
+    """Build ``output/<name>/`` from ``input/<name>/``, driven by its ``notes.yaml``.
+
+    The one-command path: a bare ``<name>`` resolves under ``input/`` (and writes under
+    ``output/``); a path is used as-is. Everything else — title, date, place, speakers
+    (persons of interest), language, slides, context — is read from the folder's
+    ``notes.yaml`` by :func:`notes_helper.report.build_report`.
+    """
+    from . import config
+    from .report import build_report
+
+    name = a.name
+    input_dir = name if os.path.sep in name or os.path.isdir(name) else os.path.join(config.INPUT_DIR, name)
+    output_dir = a.output or os.path.join(config.OUTPUT_DIR, os.path.basename(input_dir.rstrip("/")))
+    _setup_nh_run_env()
+    out = build_report(
+        input_dir,
+        output_dir,
+        title=a.title,
+        model=a.model,
+        language=a.lang,
+        synth=not a.no_synth,
+        reuse_synth=a.reuse,
+    )
+    print(f"  built -> {out}")
 
 
 def _cmd_all(a: argparse.Namespace) -> None:
@@ -359,6 +430,26 @@ def main(argv: Sequence[str] | None = None) -> None:
         p.add_argument("--context", default="")
         p.add_argument("--context-file", default="")
         p.add_argument("--context-dir", default="")
+
+    p = sub.add_parser(
+        "build",
+        help="build output/<name>/ from input/<name>/, driven by its notes.yaml",
+    )
+    p.add_argument("name", help="folder name under input/ (or a path to an input folder)")
+    p.add_argument("--output", default="", help="output dir (default: output/<name>)")
+    p.add_argument("--title", default="", help="override the report title (else from notes.yaml)")
+    p.add_argument(
+        "--model", default=os.environ.get("NOTES_HELPER_OLLAMA_MODEL", "gemma3:4b"),
+        help="Ollama model for the synthesis",
+    )
+    # No default language: None discovers it from the transcript; a code forces one.
+    p.add_argument("--lang", default=None, help="force the report language (else auto/notes.yaml)")
+    p.add_argument("--no-synth", action="store_true", help="skip the local LLM (empty summary tabs)")
+    p.add_argument(
+        "--reuse", action="store_true",
+        help="render-only: reuse the saved synthese.json, no LLM (fast presentational rebuild)",
+    )
+    p.set_defaults(func=_cmd_build)
 
     p = sub.add_parser("run")
     p.add_argument("audio")

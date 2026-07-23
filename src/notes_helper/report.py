@@ -196,11 +196,34 @@ def _meeting_context(
     return "\n\n".join(p for p in parts if p)
 
 
-def _ensure_transcript(audio: str, output_dir: str) -> list[dict]:
+def _drop_spurious(transcript: list[dict], names: dict, roster: list[str]) -> tuple[list[dict], dict]:
+    """Remove voices that are not persons of interest — a waiter, a neighbouring table.
+
+    A cluster whose assigned name is not in the roster is spurious; its turns are dropped
+    from the transcript entirely (and thus from the synthesis). As a safety net, if the
+    naming matched *nobody* in the roster we keep everything rather than empty the report.
+    """
+    roster_set = set(roster)
+    kept = {sid for sid, nm in names.items() if nm in roster_set}
+    if not kept:
+        return transcript, names
+    return (
+        [u for u in transcript if u["speaker"] in kept],
+        {sid: nm for sid, nm in names.items() if sid in kept},
+    )
+
+
+def _ensure_transcript(audio: str, output_dir: str, min_speakers: int | None = None) -> list[dict]:
     """Diarize + transcribe ``audio`` into ``output_dir/transcript.json`` (reused if present).
 
-    Shells out to the Rust ``nh-run`` in transcribe-only mode: it discovers the speaker count
-    and runs the O(n) block-wise diarization + whisper.cpp ASR, writing ``transcript.json``.
+    Shells out to the Rust ``nh-run`` in transcribe-only mode, which runs the O(n) block-wise
+    diarization + whisper.cpp ASR and writes ``transcript.json``.
+
+    The speaker count is DISCOVERED, never capped by the roster: a recording may hold voices
+    beyond the persons of interest (a waiter, a neighbouring table) and those must stay
+    distinct so they can be marked spurious downstream — not merged into a named person.
+    ``min_speakers`` (the roster length) is only a FLOOR passed to the diarizer so discovery
+    surfaces at least the people we know spoke; it never forbids finding more.
     """
     tj = os.path.join(output_dir, "transcript.json")
     if not os.path.isfile(tj):
@@ -209,6 +232,8 @@ def _ensure_transcript(audio: str, output_dir: str) -> list[dict]:
         env = dict(os.environ)
         env.setdefault("DYLD_LIBRARY_PATH", os.path.join(os.path.dirname(binary)))
         env["NH_TRANSCRIBE_ONLY"] = "1"
+        if min_speakers is not None:
+            env["NH_MIN_SPEAKERS"] = str(min_speakers)  # floor for discovery, not a cap
         subprocess.run([binary, audio, output_dir], env=env, check=True)
     with open(tj, encoding="utf-8") as fh:
         return json.load(fh)["utterances"]
@@ -281,13 +306,20 @@ def build_report(
     audio = _find_audio(input_dir)
     deck = _resolve_deck(input_dir, notes)
 
+    # The roster (names) is the set of PERSONS OF INTEREST — WHO we care to name — not a cap
+    # on how many voices exist. Its length is only a floor so discovery surfaces at least the
+    # people we know spoke; extra voices (a waiter, another table) stay distinct and are
+    # marked spurious when we name speakers, never merged into a named person.
+    roster = _norm_roster(notes.get("speakers"))
+    min_speakers = len(roster) or None
+
     # 1) transcript (Rust O(n) diar + ASR) and 2) the player's MP3.
-    transcript = _ensure_transcript(audio, output_dir)
+    transcript = _ensure_transcript(audio, output_dir, min_speakers=min_speakers)
     audio_rel = _ensure_mp3(audio, output_dir)
 
-    # Speakers: the diarizer discovered HOW MANY voices; the YAML gives the roster of
-    # NAMES. We determine which id is which person from the conversation itself (the
-    # roster order is not an identity claim). Ids with no confident match keep their id.
+    # The diarizer discovered HOW MANY voices; we then determine which id is which person of
+    # interest from the conversation itself — the roster ORDER is not an identity claim, and
+    # a voice matching no roster name keeps its id (spurious / external).
     resolved_model = model or config.OLLAMA_MODEL
     labels = sorted({u["speaker"] for u in transcript})
 
@@ -296,13 +328,21 @@ def build_report(
     reuse = (reuse_synth or bool(os.environ.get("NH_REUSE_SYNTH"))) and os.path.exists(synth_path)
     if reuse:
         # Render-only: reload the saved synthesis, no LLM. Presentational changes and
-        # notes.yaml header edits re-render in seconds this way.
+        # notes.yaml header edits re-render in seconds this way. Re-apply the drop-spurious
+        # policy so an edited roster (or a synthesis saved before it) stays consistent.
         with open(synth_path, encoding="utf-8") as fh:
             syn = json.load(fh)
+        if roster:
+            saved_names = {sid: info.get("name", sid) for sid, info in syn.get("speakers", {}).items()}
+            transcript, kept_names = _drop_spurious(transcript, saved_names, roster)
+            syn["speakers"] = {sid: syn["speakers"][sid] for sid in kept_names}
     else:
-        roster = _norm_roster(notes.get("speakers"))
         if synth and roster:
             names = assign_speaker_names(transcript, roster, resolved_model, language)
+            # Drop spurious voices (no roster match) before synthesis, so a waiter's words
+            # never enter the summary, decisions or citations.
+            transcript, names = _drop_spurious(transcript, names, roster)
+            labels = sorted(names)
         else:
             names = {lbl: lbl for lbl in labels}
         speakers = {lbl: {"name": names.get(lbl, lbl), "role": ""} for lbl in labels}
