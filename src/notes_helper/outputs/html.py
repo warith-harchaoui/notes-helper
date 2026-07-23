@@ -205,7 +205,7 @@ def render_html(
     dec_html = "".join(
         '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">'
         '<div class="flex items-start gap-3"><span class="mt-0.5 text-emerald-600 dark:text-emerald-400">✓</span>'
-        f'<div><p class="font-medium">{esc(d["decision"])}</p>{dec_ctx(d)}</div></div></div>'
+        f'<div><p class="font-medium">{esc(d.get("decision", ""))}</p>{dec_ctx(d)}</div></div></div>'
         for d in syn.get("decisions", [])
     )
 
@@ -213,7 +213,7 @@ def render_html(
     # falls back to a dash. No due-date column — deadlines are not tracked here.
     act_rows = "".join(
         f'<tr class="border-b border-slate-100 dark:border-slate-800">'
-        f'<td class="py-3 pr-4 align-top">{esc(a["action"])}</td>'
+        f'<td class="py-3 pr-4 align-top">{esc(a.get("action", ""))}</td>'
         f'<td class="py-3 align-top whitespace-nowrap"><span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-sm">{esc(a.get("responsable", "—"))}</span></td></tr>'
         for a in syn.get("actions", [])
     )
@@ -227,17 +227,17 @@ def render_html(
 
     # Chapter buttons carry a data-t timestamp so JS can seek the player to them.
     chap_html = "".join(
-        f'<button class="chapter group flex w-full items-start gap-4 rounded-xl border border-slate-200 dark:border-slate-700 p-4 text-left transition hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10" data-t="{c["t"]}">'
-        f'<span class="mt-0.5 shrink-0 rounded-lg bg-slate-900 dark:bg-slate-700 px-2.5 py-1 font-mono text-xs text-white">{_hhmmss(c["t"])}</span>'
-        f'<span><span class="block font-medium group-hover:text-emerald-700 dark:group-hover:text-emerald-400">{esc(c["titre"])}</span>'
+        f'<button class="chapter group flex w-full items-start gap-4 rounded-xl border border-slate-200 dark:border-slate-700 p-4 text-left transition hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10" data-t="{c.get("t", 0)}">'
+        f'<span class="mt-0.5 shrink-0 rounded-lg bg-slate-900 dark:bg-slate-700 px-2.5 py-1 font-mono text-xs text-white">{_hhmmss(c.get("t", 0))}</span>'
+        f'<span><span class="block font-medium group-hover:text-emerald-700 dark:group-hover:text-emerald-400">{esc(c.get("titre", ""))}</span>'
         f'<span class="mt-1 block text-sm text-slate-500">{esc(c.get("resume", ""))}</span></span></button>'
         for c in syn.get("chapitres", [])
     )
 
     themes_html = "".join(
         f'<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-5">'
-        f'<h3 class="mb-2 font-semibold text-emerald-700 dark:text-emerald-400">{esc(t["theme"])}</h3>'
-        f"{ul(t['points'])}</div>"
+        f'<h3 class="mb-2 font-semibold text-emerald-700 dark:text-emerald-400">{esc(t.get("theme", ""))}</h3>'
+        f"{ul(t.get('points', []))}</div>"
         for t in syn.get("themes", [])
     )
 
@@ -249,7 +249,7 @@ def render_html(
         ts = f" · {_hhmmss(q['t'])}" if q.get("t") is not None else ""
         return (
             f'<figure class="rounded-xl border-l-4 p-4 bg-slate-50 dark:bg-slate-800/50" style="border-color:{col}">'
-            f'<blockquote class="italic">« {esc(q["texte"])} »</blockquote>'
+            f'<blockquote class="italic">« {esc(q.get("texte", ""))} »</blockquote>'
             f'<figcaption class="mt-2 text-sm text-slate-500">— {esc(who)}{esc(ts)}</figcaption></figure>'
         )
 
