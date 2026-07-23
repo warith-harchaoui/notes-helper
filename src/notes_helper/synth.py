@@ -44,6 +44,12 @@ import os_helper as osh
 from . import i18n as _i18n
 from .config import OLLAMA_MODEL, OLLAMA_URL
 
+# Context window (tokens) requested from Ollama on every call. The default (2048) is far
+# too small for our inputs — a transcript chunk plus context on the map step, a large batch
+# of partial notes on the reduce step — and a small window silently truncates them. 32k
+# comfortably fits input + output for gemma3 (128k-capable) without over-reserving VRAM.
+_OLLAMA_NUM_CTX: int = 32768
+
 
 def _hhmmss(s: float | int | None) -> str:
     """Format a duration in seconds as ``H:MM:SS``.
@@ -94,7 +100,18 @@ def _ollama(messages: list[dict], model: str, fmt_json: bool = True, timeout: in
     Uses the stdlib ``urllib`` on purpose: no third-party HTTP client, and the
     request never leaves localhost.
     """
-    body: dict = {"model": model, "messages": messages, "stream": False}
+    # Ollama defaults num_ctx to 2048 tokens — far too small here: a map call carries the
+    # transcript chunk plus the (possibly distilled) context, and the reduce call carries a
+    # large batch of partial notes, so a small window silently TRUNCATES the input and the
+    # model returns garbage that fails to parse (every chunk failing looks like "Ollama
+    # unreachable" and drops the whole synthesis to the heuristic). gemma3 handles 128k, so
+    # we ask for a generous window that comfortably fits input + output.
+    body: dict = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "options": {"num_ctx": _OLLAMA_NUM_CTX},
+    }
     if fmt_json:
         body["format"] = "json"
     req = urllib.request.Request(
