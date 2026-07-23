@@ -79,6 +79,36 @@ propres/termes se transcrivent avec assez de confiance pour être crus). Sur le 
 **online/streaming** — délibérément préservé — la confiance reste `None` (non mesurée)
 plutôt que fabriquée ; `#[serde(default)]` garde les anciens transcripts lisibles.
 
+### Entrée « dossier » et `notes.yaml`
+Un dossier d'entrée porte l'enregistrement (le plus gros média l'emporte) et, en
+option, un `notes.yaml` de vérité terrain (tous champs optionnels) qui affine tout le
+compte-rendu : `title`, `date`, `time`, `location`, `language` (forcée, sinon
+auto-détectée). Deux champs méritent attention :
+- **`speakers` = liste de NOMS**, jamais indexée par identifiant de diarisation
+  (S0/S1). La diarisation découvre *combien* de voix (compteur entier, jamais codé en
+  dur) ; l'appariement voix↔personne est **déterminé** depuis la conversation
+  (`assign_speaker_names` : attribution LLM, repli sur une heuristique de temps de
+  parole). L'ordre n'est pas une revendication d'identité.
+- **`slides`** = un PDF du dossier servant de diaporama (rastérisé et synchronisé au
+  contenu discuté) ; sinon on auto-détecte un PDF **paysage** (un PDF **portrait** est
+  un document, pas un diaporama).
+- **`context_files`** = documents repliés dans le contexte de synthèse ; un gros
+  document est **distillé** sur plusieurs passes LLM hors-ligne (découpe → résumé →
+  fusion → récursion, `distill_context`) au lieu d'être tronqué.
+- **`additional_glossary`** = mots/noms propres qui **complètent** le contexte (jamais
+  ne le remplacent). Le `context.md` du dossier reste lu automatiquement.
+
+La synthèse (`synth`, Ollama local, `gemma3:4b` par défaut) est en map/reduce, avec un
+**reduce hiérarchique** (repli par lots puis re-fusion) pour qu'une réunion de plusieurs
+heures atteigne le rapport sans troncature ; les prompts sont exhaustifs sur les thèmes,
+découpent toute la conversation en chapitres cohérents et attribuent les citations mot
+pour mot aux participants nommés.
+
+> **Prévu (pas encore livré) :** une **boucle contexte↔transcription** — le
+> contexte/glossaire distillé alimente l'`initial_prompt` de whisper pour améliorer la
+> transcription, et la **confiance** d'ASR arbitre quel contexte compte et quels
+> passages peu sûrs réparer.
+
 ---
 
 ## 3. Les ports (traits Rust) et leurs adaptateurs

@@ -129,7 +129,56 @@ print(n)
 # 0
 ```
 
-## 7. Configuration
+## 7. Sharpen the report with `notes.yaml`
+
+Drop a `notes.yaml` (all fields optional) next to the recording, then build the
+report from the whole folder — one code path handles a plain conversation and a
+slide-backed talk alike:
+
+```yaml
+# input/meeting/notes.yaml
+title: Product sync — Q3 roadmap
+date: 2026-07-23
+time: "14:00"
+location: Paris, room B2
+language: en                    # omit to auto-detect from the transcript
+speakers:                       # a LIST OF NAMES, not keyed by S0/S1
+  - Warith Harchaoui
+  - Alexandre Larmagnac
+slides: deck.pdf                # a PDF in the folder (omit → auto-detect a landscape PDF)
+context_files:                  # documents distilled into the synthesis context
+  - brief.md
+  - manuscript.pdf
+additional_glossary:            # proper-nouns that COMPLETE (never replace) the context
+  - TitaNet
+  - Plutchik
+```
+
+```python
+from notes_helper.report import build_report
+
+index_html = build_report("input/meeting")   # reads notes.yaml if present
+print(index_html)
+# output/meeting/index.html
+```
+
+What each field buys you:
+
+- **`speakers`** — the diarizer discovers *how many* voices there are; the pipeline
+  then determines *which recorded voice is which named person* from the conversation
+  itself (LLM attribution, talk-time heuristic fallback). Order is not an identity
+  claim; an unmatched voice keeps its `S0`/`S1` id.
+- **`slides`** — the named PDF is rasterized and content-synced to the moment each
+  slide is discussed. A portrait PDF is a document, not a deck, so a folder with
+  only a portrait PDF gets no slide panel.
+- **`context_files`** — a large document is *distilled* across several offline LLM
+  passes (chunk → summarise → merge → recurse) instead of truncated, so the whole
+  document informs the report. The folder's `context.md` is still read
+  automatically; these augment it.
+- **`additional_glossary`** — words/proper-nouns the model must spell right; they
+  complete the context, never replace it.
+
+## 8. Configuration
 
 ```bash
 cp notes_helper_config.json.example notes_helper_config.json   # gitignored

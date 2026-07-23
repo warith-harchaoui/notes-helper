@@ -120,6 +120,47 @@ on-device models belong to a worker surface, not a synchronous request.
 
 For the full catalog of recipes, see [📋 EXAMPLES.md](https://github.com/warith-harchaoui/notes-helper/blob/main/EXAMPLES.md).
 
+## Ground truth: `notes.yaml`
+
+Drop a `notes.yaml` next to the recording in an input folder and the whole report
+sharpens. **Every field is optional** — supply only what you know:
+
+```yaml
+title: Product sync — Q3 roadmap        # report header title
+date: 2026-07-23                        # 📅 ISO date (or any string)
+time: "14:00"                           # 🕘 start time
+location: Paris, room B2                # 📍 free text
+language: en                            # force report language (omit to auto-detect)
+speakers:                               # a LIST OF NAMES — not keyed by S0/S1
+  - Warith Harchaoui
+  - Alexandre Larmagnac
+slides: deck.pdf                        # PDF in the folder to use as the deck
+context_files:                          # documents folded into the synthesis context
+  - brief.md
+  - manuscript.pdf
+additional_glossary:                    # words/proper-nouns that COMPLETE the context
+  - TitaNet
+  - Plutchik
+```
+
+Notes on the two subtle fields:
+
+- **`speakers` is a roster of names, not an id map.** The diarizer discovers *how
+  many* voices there are; the pipeline then **determines which recorded voice is
+  which person** from the conversation itself (an LLM attribution with a talk-time
+  heuristic fallback). Order carries no identity claim.
+- **`slides`** names a PDF in the folder to use as the deck (rasterized and
+  content-synced to the moment each slide is discussed). Leave it unset to
+  auto-detect a *landscape* PDF; a *portrait* PDF is treated as a document, not a
+  deck (no slides).
+- **`context_files`** are folded into the synthesis context (proper nouns,
+  definitions, framing). A large document is **distilled across several offline LLM
+  passes** (chunk → summarise → merge → recurse) instead of being truncated, so the
+  whole document informs the report.
+- **`additional_glossary`** *completes* (never replaces) the context. The folder's
+  `context.md` is still read automatically; `context_files` and
+  `additional_glossary` augment it.
+
 ## Architecture
 
 Three layers over one seam (16 kHz mono float32 frames):

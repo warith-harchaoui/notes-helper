@@ -101,6 +101,49 @@ render("output/reunion", ["html", "md"])
 
 Pour le catalogue complet de recettes, voir [📋 EXAMPLES.md](https://github.com/warith-harchaoui/notes-helper/blob/main/EXAMPLES.md).
 
+## Vérité terrain : `notes.yaml`
+
+Déposez un `notes.yaml` à côté de l'enregistrement dans un dossier d'entrée et tout
+le compte-rendu s'affine. **Tous les champs sont optionnels** — ne renseignez que
+ce que vous connaissez :
+
+```yaml
+title: Point produit — feuille de route T3   # titre en tête de rapport
+date: 2026-07-23                             # 📅 date ISO (ou toute chaîne)
+time: "14:00"                                # 🕘 heure de début
+location: Paris, salle B2                    # 📍 texte libre
+language: fr                                 # force la langue (omettre = auto-détection)
+speakers:                                    # une LISTE DE NOMS — pas indexée par S0/S1
+  - Warith Harchaoui
+  - Alexandre Larmagnac
+slides: presentation.pdf                     # PDF du dossier à utiliser comme diaporama
+context_files:                               # documents intégrés au contexte de synthèse
+  - brief.md
+  - manuscrit.pdf
+additional_glossary:                         # mots/noms propres qui COMPLÈTENT le contexte
+  - TitaNet
+  - Plutchik
+```
+
+À propos des deux champs subtils :
+
+- **`speakers` est une liste de noms, pas une table d'identifiants.** La diarisation
+  découvre *combien* de voix il y a ; le pipeline **détermine ensuite quelle voix
+  enregistrée est quelle personne** à partir de la conversation elle-même
+  (attribution par LLM avec repli sur une heuristique de temps de parole). L'ordre
+  ne constitue aucune revendication d'identité.
+- **`slides`** nomme un PDF du dossier à utiliser comme diaporama (rastérisé et
+  synchronisé sur le moment où chaque diapo est discutée). Laissez ce champ vide
+  pour auto-détecter un PDF *paysage* ; un PDF *portrait* est traité comme un
+  document, pas un diaporama (aucune diapo).
+- **`context_files`** sont intégrés au contexte de synthèse (noms propres,
+  définitions, cadrage). Un document volumineux est **distillé sur plusieurs passes
+  LLM hors-ligne** (découpe → résumé → fusion → récursion) plutôt que tronqué, afin
+  que l'intégralité du document informe le compte-rendu.
+- **`additional_glossary`** *complète* (ne remplace jamais) le contexte. Le
+  `context.md` du dossier reste lu automatiquement ; `context_files` et
+  `additional_glossary` viennent l'enrichir.
+
 ## Architecture
 
 Trois couches sur une seule couture (trames 16 kHz mono float32) :

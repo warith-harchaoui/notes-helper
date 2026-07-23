@@ -71,6 +71,27 @@ speak — harder, because it needs **online** diarization with no future context
 - **Sequencing:** offline + record-live-then-report ship first; real-time
   transcript is the committed second wave (its quality gate is online diarization).
 
+## Ground truth per folder — `notes.yaml`
+
+An input folder holds the recording and, optionally, a `notes.yaml` of ground
+truth that sharpens the whole report. **Every field is optional:** `title`,
+`date`, `time`, `location`, `language` (forced, else auto-detected from the
+transcript). Two fields carry real intelligence:
+
+- **`speakers` is a list of *names*, not an id map.** Diarization discovers *how
+  many* voices there are (an integer speaker count, never hardcoded); the pipeline
+  then **determines which recorded voice is which person** from the conversation
+  itself (LLM attribution, talk-time heuristic fallback). Listing order is not an
+  identity claim.
+- **`slides`** names a PDF in the folder to use as the deck (rasterized,
+  content-synced to the moment each slide is discussed). Unset → auto-detect a
+  *landscape* PDF; a *portrait* PDF is a document, not a deck.
+- **`context_files`** are documents folded into the synthesis context; a large one
+  is **distilled** across several offline LLM passes (chunk → summarise → merge →
+  recurse) instead of truncated, so the whole document informs the report.
+- **`additional_glossary`** *completes* the context (proper nouns to spell right),
+  never replaces it. A folder's `context.md` is still read automatically.
+
 ## The report (anatomy)
 
 A single offline HTML file — no CDN, no fonts phoning home — with tabs:
@@ -89,7 +110,9 @@ A single offline HTML file — no CDN, no fonts phoning home — with tabs:
 Speakers are shown as coloured, named chips with roles. An audio player is
 embedded (small Opus + universal MP3 fallback). **Every claim in the summary is
 grounded**: decisions, actions, and quotes link back to the exact second of
-audio that justifies them — click to hear it.
+audio that justifies them — every timestamp is a clickable cursor. Clicking a
+cursor jumps the page to the top so the synced slide stays visible (in both slide
+and no-slide modes); the player's own slider seeks without scrolling the page.
 
 ## Speaker identity — "name once, known forever on your device"
 
@@ -161,7 +184,9 @@ a render of it. No lock-in, no religion — *you* decide where a report goes.
 ## The built-in tech (all local)
 
 - **VAD:** Silero · **Diarization:** TitaNet embeddings + agglomerative clustering
-- **ASR:** whisper.cpp (`large-v3-turbo`), multilingual (FR/EN/…)
-- **Summary:** local LLM via Ollama (desktop) / MLX (iPhone)
+- **ASR:** whisper.cpp, multilingual (FR/EN/…) — `large-v3-turbo` (quantized q5_0)
+  on the standard/online tier, full `large-v3` on the deep offline tier
+- **Summary:** local LLM via Ollama (`gemma3:4b` default) / MLX (iPhone) —
+  hierarchical map/reduce so a multi-hour meeting reaches the report without truncation
 - **Capture:** `capture-helper` (desktop) / `AVAudioEngine` (iOS)
 - **Report:** self-contained HTML with vendored fonts + Tailwind (zero external requests)

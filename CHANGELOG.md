@@ -7,6 +7,35 @@ All notable changes to this project are documented here. Format based on
 ## [Unreleased]
 
 ### Added
+- **Folder input spec + report pipeline (`notes.yaml`).** A `notes.yaml` (all fields
+  optional) next to the recording sharpens the whole report via
+  `notes_helper.report.build_report(input_dir, …)`, which handles a plain conversation
+  and a slide-backed talk on one code path. Header fields: `title`, `date`, `time`,
+  `location`, `language` (forced, else auto-detected from the transcript). Intelligent
+  fields: **`speakers`** is a LIST OF NAMES (never keyed by diarizer id) — the diarizer
+  discovers the integer speaker count and the pipeline determines which recorded voice
+  is which person from the conversation itself (`assign_speaker_names`: LLM attribution
+  with a talk-time heuristic fallback; order is not an identity claim). **`slides`**
+  names a PDF in the folder to use as the deck (rasterized + content-synced), else a
+  landscape PDF is auto-detected (a portrait PDF is a document, not a deck).
+  **`context_files`** are folded into the synthesis context; a large document is
+  DISTILLED across several offline LLM passes (chunk → summarise → merge → recurse,
+  `distill_context`) instead of truncated. **`additional_glossary`** COMPLETES (never
+  replaces) the context; the folder's `context.md` is still read automatically.
+- **Hierarchical map/reduce synthesis + sharper prompts.** The reduce is now
+  hierarchical (batch partial notes, fold each batch, re-fold the intermediates) so a
+  multi-hour meeting reaches the report without truncation. The `map_sys`/`reduce_sys`
+  prompts (`locales/i18n.yaml`) are exhaustive on themes, segment the whole conversation
+  into coherent chronological chapters, and attribute verbatim quotes to participants by
+  name. Default synthesis model is `gemma3:4b` (local Ollama).
+- **Report interaction — click-to-top on every timestamp cursor.** In the HTML report
+  every timestamp is a clickable cursor; clicking one jumps the page to the top so the
+  synced slide is visible (both slide and no-slide modes), while the player's own slider
+  seeks without scrolling the page.
+- *(Planned, not yet built)* an **iterative context↔transcript loop**: the distilled
+  context/glossary feeds whisper's `initial_prompt` to improve transcription, and the
+  ASR confidence score judges which context matters and which low-confidence spans to
+  repair.
 - **Unified i18n (GUI + prompts, fr/en/es) with discovered language.** One catalog at the
   repo root, `locales/i18n.yaml`, holds every translatable string — HTML report labels
   under `gui:` and LLM synthesis prompts under `prompts:` — each in `fr`/`en`/`es`. New
