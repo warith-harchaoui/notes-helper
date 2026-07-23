@@ -493,40 +493,78 @@ def _batch_by_chars(items: list[dict], budget: int) -> list[list[dict]]:
     return batches
 
 
-def _reduce(partials: list[dict], reduce_sys: str, model: str, _depth: int = 0) -> dict:
-    """Fold partial notes into one final report, hierarchically when they overflow.
+def _merge_reports(reports: list[dict]) -> dict:
+    """Deterministically union per-batch reports so nothing is dropped or drifts.
 
-    Notes that fit one reduce call are folded directly. Otherwise they are split
-    into budget-sized batches, each folded into an intermediate report, and those
-    reports are folded again — so a four-hour meeting reaches the final report
-    without silently dropping most of its notes to a fixed truncation. A depth cap
-    guarantees termination on pathological inputs (fall back to a truncated fold).
+    When a long meeting is reduced batch by batch, each batch yields a full report.
+    Folding those reports through the LLM *again* is lossy (it drops chapters and
+    even drifts the language), so we union them in plain Python instead: concatenate
+    the prose/list fields, sort chapters by time, and merge themes by name. Faithful
+    and cheap; the caller's :func:`normalize_synthese` tidies the shapes afterward.
+    """
+    out: dict = {
+        "resume": [],
+        "points_cles": [],
+        "decisions": [],
+        "actions": [],
+        "chapitres": [],
+        "themes": [],
+        "citations": [],
+    }
+    theme_at: dict[str, int] = {}
+    for r in reports:
+        for key in ("resume", "points_cles"):
+            val = r.get(key, [])
+            out[key].extend(val if isinstance(val, list) else [val])
+        for key in ("decisions", "actions", "chapitres", "citations"):
+            val = r.get(key, [])
+            if isinstance(val, list):
+                out[key].extend(val)
+        for theme in r.get("themes", []) or []:
+            if not isinstance(theme, dict):
+                theme = {"theme": str(theme), "points": []}
+            name = theme.get("theme", "")
+            points = theme.get("points", []) or []
+            if name in theme_at:
+                out["themes"][theme_at[name]]["points"].extend(points)
+            else:
+                theme_at[name] = len(out["themes"])
+                out["themes"].append({"theme": name, "points": list(points)})
+    out["chapitres"].sort(key=lambda c: (c.get("t") or 0) if isinstance(c, dict) else 0)
+    return out
+
+
+def _reduce(partials: list[dict], reduce_sys: str, model: str) -> dict:
+    """Fold partial notes into one final report, batching when they overflow one call.
+
+    Notes that fit one reduce call are folded directly by the LLM. Otherwise they are
+    split into budget-sized batches, each folded into its own report, and the batch
+    reports are merged DETERMINISTICALLY (:func:`_merge_reports`) — a four-hour meeting
+    reaches the final report without a fixed truncation and without a lossy second LLM
+    fold that would drop chapters or drift the language.
     """
     blob = json.dumps(partials, ensure_ascii=False)
-    if len(blob) <= _REDUCE_MAX_CHARS or _depth >= 3:
-        payload = blob if len(blob) <= _REDUCE_MAX_CHARS else blob[:_REDUCE_MAX_CHARS]
+    if len(blob) <= _REDUCE_MAX_CHARS:
         return _ollama_obj(
-            [{"role": "system", "content": reduce_sys}, {"role": "user", "content": payload}],
+            [{"role": "system", "content": reduce_sys}, {"role": "user", "content": blob}],
             model,
         )
     batches = _batch_by_chars(partials, _REDUCE_MAX_CHARS)
-    intermediates: list[dict] = []
+    reports: list[dict] = []
     for i, batch in enumerate(batches):
-        osh.info(f"  synth reduce (batch {i + 1}/{len(batches)}, depth {_depth})...")
-        part = _ollama_obj(
+        osh.info(f"  synth reduce (batch {i + 1}/{len(batches)})...")
+        report = _ollama_obj(
             [
                 {"role": "system", "content": reduce_sys},
                 {"role": "user", "content": json.dumps(batch, ensure_ascii=False)},
             ],
             model,
         )
-        if part:
-            intermediates.append(part)
-    if not intermediates:
+        if report:
+            reports.append(report)
+    if not reports:
         return {}
-    # Fold the intermediate reports together — they are report-shaped but still valid
-    # "notes" to the reducer. Recursion collapses toward a single final report.
-    return _reduce(intermediates, reduce_sys, model, _depth + 1)
+    return reports[0] if len(reports) == 1 else _merge_reports(reports)
 
 
 def distill_context(text: str, model: str, *, budget: int = _CONTEXT_MAX_CHARS, focus: str = "") -> str:
