@@ -240,5 +240,3 @@ settings.yaml
 
 # Landscape/positioning-map CSVs (generated from the star tables; the PNG
 # positioning map is the committed artifact, not these intermediates).
-assets/landscape.csv
-assets/paysage.csv

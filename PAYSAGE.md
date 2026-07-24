@@ -23,6 +23,7 @@ complet.
 Lignes = produits (cloud/payant en haut, local/gratuit en dessous). Colonnes =
 les critères qui définissent le créneau de notes-helper.
 
+<!-- TABLE:START -->
 | Comptes rendus | Priorité au local | Ouvert & gratuit | Diarisation | Identité d'intervenant persistante | Synthèse sourcée | Propriétaire des sorties (Markdown/vault) | Multi-surface |
 | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **notes-helper** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
@@ -41,28 +42,17 @@ les critères qui définissent le créneau de notes-helper.
 | Hyprnote | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐ |
 | Meetily | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐ | ⭐ | ⭐⭐⭐⭐ | ⭐⭐ |
 | whisper.cpp | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐ | ⭐ | ⭐ | ⭐⭐ | ⭐⭐⭐ |
+<!-- TABLE:END -->
 
 ## Carte de positionnement
 
+<!-- FIGURE:START -->
 Représentation 2D du tableau ci-dessus.
 
 ![Carte de positionnement](https://raw.githubusercontent.com/warith-harchaoui/notes-helper/main/assets/paysage.png)
 
 La carte est un résumé en 2D des 7 critères : à lire comme une forme, pas comme un classement. « notes-helper » se situe dans le coin en haut à droite. Les axes se lisent **Horizontal — Surface ↔ Markdown** et **Vertical — Priorit ↔ Synth**.
-
-> Les notes reflètent la configuration typique/par défaut de chaque outil pour
-> *cette* tâche à la mi-2026. Les produits cloud n'offrent généralement qu'une
-> offre gratuite limitée et exigent un compte, d'où une note basse en **Ouvert &
-> gratuit**. Certains outils locaux peuvent greffer un LLM cloud pour les résumés,
-> échangeant la garantie de souveraineté contre de la qualité.
->
-> La ligne **« AI Note Taker » archétype** représente l'attente grand public
-> générique — l'appli cloud de notes vocales typique que les gens désignent par
-> « un preneur de notes IA » (freemium, verrouillé derrière un compte,
-> transcription + résumé cloud, sans mémoire des intervenants d'une réunion à
-> l'autre). C'est la base au-*dessus* de laquelle notes-helper est construit, pas
-> un produit unique ; les lignes cloud nommées ci-dessous en sont les instances
-> concrètes.
+<!-- FIGURE:END -->
 
 ## Les deux familles
 

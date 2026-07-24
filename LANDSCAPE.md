@@ -21,6 +21,7 @@ intended, designed-for behaviour of the full pipeline.
 Rows = products (cloud/paid on top, local/free below). Columns = the criteria
 that define notes-helper's niche.
 
+<!-- TABLE:START -->
 | Meeting Notes | Local-first | Open & free | Diarization | Persistent speaker ID | Grounded synthesis | Owns output (Markdown/vault) | Multi-surface |
 | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **notes-helper** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
@@ -39,25 +40,17 @@ that define notes-helper's niche.
 | Hyprnote | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐ |
 | Meetily | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐ | ⭐ | ⭐⭐⭐⭐ | ⭐⭐ |
 | whisper.cpp | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐ | ⭐ | ⭐ | ⭐⭐ | ⭐⭐⭐ |
+<!-- TABLE:END -->
 
 ## Positioning map
 
+<!-- FIGURE:START -->
 2D representation of the table above.
 
 ![Positioning map](https://raw.githubusercontent.com/warith-harchaoui/notes-helper/main/assets/landscape.png)
 
-The map is a 2-D summary of the seven criteria, so read it as a shape, not a scoreboard. `notes-helper` is at the top-right corner. The axes read **Horizontal — Surface ↔ Markdown** and **Vertical — Local ↔ Synthesis**.
-
-> Ratings reflect each tool's typical/default configuration for *this* job as of
-> mid-2026. Cloud products usually offer only a limited free tier and require an
-> account, so they score low on **Open & free**. Some local tools can bolt on a
-> cloud LLM for summaries, trading the sovereignty guarantee for quality.
->
-> The **« AI Note Taker » archetype** row is the generic mainstream expectation —
-> the typical cloud voice-note app people mean by "an AI note taker" (freemium,
-> account-gated, cloud transcription + summary, no cross-meeting speaker memory).
-> It is the baseline notes-helper is built *above*, not a single product; the
-> named cloud rows below are its concrete instances.
+The map is a 2-D summary of the seven criteria, so read it as a shape, not a scoreboard. `notes-helper` is at the top-right corner. The axes read **Horizontal — Versatile ↔ Openness** and **Vertical — Localism ↔ Authenticity**.
+<!-- FIGURE:END -->
 
 ## The two clusters
 
