@@ -16,6 +16,8 @@ By [Warith HARCHAOUI](https://linkedin.com/in/warith-harchaoui)
 
 [💻 Documentation](https://harchaoui.org/warith/ai-helpers/docs/notes-helper-doc/)
 
+[🗺️ Landscape](https://github.com/warith-harchaoui/notes-helper/blob/main/LANDSCAPE.md)
+
 [📋 Examples](https://github.com/warith-harchaoui/notes-helper/blob/main/EXAMPLES.md)
 
 ## The promise
@@ -171,7 +173,7 @@ Three layers over one seam (16 kHz mono float32 frames):
 | **PROCESS** | [`vocal-helper`](https://github.com/warith-harchaoui/vocal-helper) |
 | **OUTPUT** | `build_page` · [`md2star`](https://github.com/warith-harchaoui/md2star) |
 
-See [📄 PRODUCT.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PRODUCT.md), [🗺️ PLAN.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PLAN.md), and [🔭 LANDSCAPE.md](https://github.com/warith-harchaoui/notes-helper/blob/main/LANDSCAPE.md).
+See [📄 PRODUCT.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PRODUCT.md), [🗺️ PLAN.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PLAN.md), and [🔭 LANDSCAPE.md](https://github.com/warith-harchaoui/notes-helper/blob/main/LANDSCAPE.md) — how notes-helper compares to other note-takers, with a positioning map.
 
 ## Tests
 

@@ -14,6 +14,8 @@ Par [Warith HARCHAOUI](https://linkedin.com/in/warith-harchaoui)
 
 [💻 Documentation](https://harchaoui.org/warith/ai-helpers/docs/notes-helper-doc/)
 
+[🗺️ Paysage](https://github.com/warith-harchaoui/notes-helper/blob/main/PAYSAGE.md)
+
 [📋 Exemples](https://github.com/warith-harchaoui/notes-helper/blob/main/EXAMPLES.md)
 
 ## La promesse
@@ -154,7 +156,7 @@ Trois couches sur une seule couture (trames 16 kHz mono float32) :
 | **TRAITEMENT** | [`vocal-helper`](https://github.com/warith-harchaoui/vocal-helper) |
 | **SORTIE** | `build_page` · [`md2star`](https://github.com/warith-harchaoui/md2star) |
 
-Voir [📄 PRODUCT.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PRODUCT.md), [🗺️ PLAN.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PLAN.md) et [🔭 LANDSCAPE.md](https://github.com/warith-harchaoui/notes-helper/blob/main/LANDSCAPE.md).
+Voir [📄 PRODUCT.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PRODUCT.md), [🗺️ PLAN.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PLAN.md) et [🔭 PAYSAGE.md](https://github.com/warith-harchaoui/notes-helper/blob/main/PAYSAGE.md) — comment notes-helper se compare aux autres preneurs de notes, avec une carte de positionnement.
 
 ## Tests
 
